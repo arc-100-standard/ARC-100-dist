@@ -1,0 +1,61 @@
+ARC-100 Distribution License
+Version 1.0 — 2026
+
+Copyright (c) 2026 David Jacopille. All rights reserved except as
+expressly granted below.
+
+This license governs the ARC-100 standard content, assets, and tooling
+distributed in this repository (the "Work"), EXCEPT the third-party Inter
+font files under assets/arc100/fonts/, which are licensed separately under
+the SIL Open Font License 1.1 (see that directory's LICENSE.txt) and are
+NOT governed by this license.
+
+1. DEFINITIONS
+   "You" means any individual or organization exercising rights under this
+   license.
+   "Personal or Internal Use" means use by You for Your own purposes —
+   studying the Work, applying the ARC-100 standard to organize Your own
+   documentation, and running the included tooling against Your own
+   projects — whether You are an individual or an organization.
+   "AI/ML Training" means using the Work, in whole or in part, as input to
+   train, fine-tune, evaluate, or otherwise develop any machine-learning or
+   artificial-intelligence model, embedding, or automated system, including
+   any text- or data-mining for those purposes.
+
+2. GRANT
+   Subject to the conditions and prohibitions below, the copyright holder
+   grants You a worldwide, royalty-free, non-exclusive, REVOCABLE license to
+   download, use, and modify the Work for Your Personal or Internal Use.
+
+3. CONDITIONS
+   You must retain, in all copies and modified versions, this license text
+   and all copyright, author, and attribution notices contained in the Work.
+
+4. PROHIBITIONS
+   Without the copyright holder's prior written permission, You may NOT:
+   (a) Sell, rent, sublicense, or distribute the Work or any modified version
+       for a fee or other commercial consideration; or incorporate the Work
+       or any part of it into any product or service that You offer, sell, or
+       license to a third party ("Resale").
+   (b) Redistribute, mirror, publish, or otherwise make the Work or any
+       modified version available to any third party or to the public, as a
+       distribution, package, fork, or mirror of ARC-100. The copyright
+       holder is the sole source of the ARC-100 distribution. This does not
+       prohibit the ARC-100 content from appearing within Your own project's
+       documentation as applied through the included tooling, provided this
+       license and all notices are retained; it prohibits offering the Work
+       itself as a separate distribution, fork, or mirror.
+   (c) Use the Work for AI/ML Training, or provide the Work to any third
+       party for that purpose.
+
+5. RESERVATION
+   All rights not expressly granted are reserved.
+
+6. TERMINATION
+   Any breach of this license terminates the rights granted to You
+   automatically.
+
+7. DISCLAIMER
+   THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY ARISING FROM THE WORK OR ITS USE.

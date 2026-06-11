@@ -1,0 +1,81 @@
+/* ===================================================================
+   LikeC4 architecture-diagram typography. Applies to the HTML+CSS-
+   rendered nodes inside <likec4-view> web components (LikeC4 1.57.0
+   renders via React Flow, NOT SVG <text> elements — selectors target
+   data-attributes on the HTML node containers).
+
+   LikeC4 1.57.0's DSL theme schema has `colors` and `sizes` only — no
+   fontFamily primitive (phase 3a finding F2). This file is the CSS
+   fallback for the project's Inter weight schedule.
+
+   Selectors below were discovered empirically in phase 3b Step 4 by
+   reading the LikeC4 bundled CSS at
+       architecture/LikeC4/node_modules/likec4/__app__/src/style.css
+
+   LikeC4's per-role discriminator attributes:
+     [data-likec4-node-title]        bold element title (default: medium weight)
+     [data-likec4-node-description]  description text below the title (default: weight 420)
+     [data-likec4-node-technology]   smaller "technology" annotation (the C4 stereotype)
+     .likec4-compound-title          group/compound title (the wrapper-element header)
+
+   LikeC4 also exposes CSS vars for font-family:
+     --fonts-likec4-element          font-family for individual elements
+     --fonts-likec4-compound         font-family for compound/group titles
+
+   Role-to-weight mapping (per chapter 00-06 §00-06.10.3.7,
+   re-targeted from the retired c4-svg-typography.css):
+
+       Bold box title          18px Inter SemiBold 600
+       Normal description      14px Inter Light 300
+       Italic stereotype       14px Inter ExtraLight 200 Italic
+       (catch-all)             14px Inter Light 300
+
+   The Inter @font-face declarations live in docs/assets/fonts/inter.css.
+   =================================================================== */
+
+/* (1) Global font-family override via LikeC4's CSS variables.
+   Scoping to <likec4-view> keeps the override out of the rest of the page. */
+likec4-view {
+  --fonts-likec4-element: "Inter", system-ui, sans-serif;
+  --fonts-likec4-compound: "Inter", system-ui, sans-serif;
+  /* font-feature-settings: enable Inter's 'cv11' (single-storey a) and
+     'ss03' (squared g) stylistic sets — matches the Mermaid-era
+     c4-svg-typography.css decision. */
+  font-feature-settings: "cv11", "ss03";
+}
+
+/* (2) Bold element title — 18px Inter SemiBold 600.
+   LikeC4's default is var(--font-weights-medium) (~500) at base size. */
+likec4-view [data-likec4-node-title] {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* (3) Compound/group title — same SemiBold treatment but a touch smaller
+   to differentiate from element titles. LikeC4 default is 15px / 600 /
+   uppercase / letter-spaced; preserve LikeC4's letter-spacing + uppercase
+   case, just swap the font. */
+likec4-view .likec4-compound-title {
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 600;
+}
+
+/* (4) Description text — 14px Inter Light 300.
+   LikeC4's default is weight 420 (custom Inter-style mid-weight) at
+   ~0.74 * --likec4-text-size. */
+likec4-view [data-likec4-node-description] {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+}
+
+/* (5) Technology annotation — the C4 stereotype equivalent.
+   Italic + ExtraLight 200 14px. LikeC4's default is normal weight at
+   ~0.635 * --likec4-text-size. */
+likec4-view [data-likec4-node-technology] {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 200;
+  font-style: italic;
+}

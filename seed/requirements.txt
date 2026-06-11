@@ -1,0 +1,28 @@
+# ARC-100 docs-build environment — hash-pinned per phase 3a TM-3a-2.
+# First Python dep manifest (D13). Install with:
+#   python3 -m pip install --user --require-hashes -r requirements.txt
+#
+# Hashes are platform-specific for packages with platform wheels (pyyaml, pyjson5).
+# The captured hashes target macOS arm64 / CPython 3.14 — the author's current
+# build environment. Contributors on Linux or other Python versions must
+# recompute those rows; the pure-python rows (mkdocs, mkdocs-material,
+# pymdown-extensions, mkdocs-likec4) are portable as-is.
+#
+# To bump a pinned version:
+#   1. Update the version below
+#   2. python3 -m pip download --no-deps --dest tmp/pip-hash/ <pkg>==<new-version>
+#   3. python3 -m pip hash tmp/pip-hash/<pkg>-<new-version>-*.whl
+#   4. Replace the --hash= line with the new sha256
+#   5. Re-install with --require-hashes
+mkdocs==1.6.1 \
+    --hash=sha256:db91759624d1647f3f34aa0c3f327dd2601beae39a366d6e064c03468d35c20e
+mkdocs-material==9.7.6 \
+    --hash=sha256:71b84353921b8ea1ba84fe11c50912cc512da8fe0881038fcc9a0761c0e635ba
+pymdown-extensions==10.21.2 \
+    --hash=sha256:5c0fd2a2bea14eb39af8ff284f1066d898ab2187d81b889b75d46d4348c01638
+pyyaml==6.0.3 \
+    --hash=sha256:34d5fcd24b8445fadc33f9cf348c1047101756fd760b4dacb5c3e99755703310
+mkdocs-likec4==1.1.1 \
+    --hash=sha256:66f948dcc4bf4ebfa14d1a7bc9b0b69ace055047c16c3353453a953f89207792
+pyjson5==2.0.1 \
+    --hash=sha256:4635e349bb1d1f1e854dc790f14be31b6cb198d6453848e8d86818104074f805

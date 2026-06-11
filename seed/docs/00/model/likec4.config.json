@@ -1,0 +1,6 @@
+{
+  "name": "<PROJECT>",
+  "include": {
+    "paths": ["../../../architecture/LikeC4/"]
+  }
+}

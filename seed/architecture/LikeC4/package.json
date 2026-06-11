@@ -1,0 +1,12 @@
+{
+  "name": "<PROJECT>-likec4",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Scoped LikeC4 toolchain for <PROJECT>-100. Distributed by ARC-100-SYNC; do not edit fields managed by ARC-100 (engines, devDependencies).",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "devDependencies": {
+    "likec4": "~1.57.0"
+  }
+}

@@ -1,0 +1,33 @@
+// Starter LikeC4 model for a downstream <PROJECT>-100.
+//
+// This is the seed the ARC-100-SYNC distribution drops at architecture/LikeC4/template.c4.
+// Replace it with the project's actual model — author your own elements,
+// relationships, and views. See chapter 00-06 §00-06.10 for the C4 vocabulary
+// + the agents-declare-software-emits authoring pattern.
+//
+// Validate locally:   architecture/LikeC4/bin/likec4 validate
+// Render in browser:  architecture/LikeC4/bin/likec4 start
+
+specification {
+  element actor
+  element softwareSystem
+}
+
+model {
+  user = actor 'User' {
+    description '<PROJECT>-100 reader.'
+  }
+
+  system = softwareSystem 'Example System' {
+    description 'Replace with the system this project is modelling.'
+  }
+
+  user -> system 'uses'
+}
+
+views {
+  view SystemContext {
+    title 'Example System — context'
+    include *
+  }
+}

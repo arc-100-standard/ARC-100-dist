@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Author-side wrapper around the scoped LikeC4 install.
+# Usage:  architecture/LikeC4/bin/likec4 <command> [args...]
+# Examples:
+#   architecture/LikeC4/bin/likec4 --version
+#   architecture/LikeC4/bin/likec4 validate
+#   architecture/LikeC4/bin/likec4 export svg --output /tmp/likec4-test/
+#   architecture/LikeC4/bin/likec4 start -p 8004     # full-model browser (phase 3c)
+#
+# Lockfile discipline (TM-3a-1): first install in this folder ever was
+# `npm install` (which generated package-lock.json). All subsequent installs
+# (fresh clones, after pulling a lockfile bump, later phases) MUST use
+# `npm ci --no-fund --no-audit` — lockfile-strict, fails fast on drift.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIKEC4_ROOT="$(dirname "${SCRIPT_DIR}")"
+REPO_ROOT="$(dirname "$(dirname "${LIKEC4_ROOT}")")"
+# cd to master-vault/docs/00/model/ — the canonical location of
+# likec4.config.json post-phase-3.1b D0.4 (was docs/architecture/ pre-3.1b).
+# LikeC4's workspace scan starts at cwd and walks down; cd-ing higher (e.g.
+# REPO_ROOT) would let `site-arc100/00/model/likec4.config.json` (the
+# mkdocs-build byproduct of copying the source config — see phase 3a §6.1)
+# get picked up as a second project, causing
+#   "Layout validation failed: Specify exact project, known: [arc-100, arc-100-1]".
+# Scoping cwd here avoids the collision regardless of whether site-arc100/
+# exists.
+cd "${REPO_ROOT}/docs/00/model"
+
+exec npm exec --prefix "${LIKEC4_ROOT}" -- likec4 "$@"

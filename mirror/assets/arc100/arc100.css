@@ -1,0 +1,626 @@
+/* ARC-100 index pages — three-level box hierarchy.
+   Source: _hooks/arc100_master_index.py
+   Pages:  master-vault/docs/00/index.md (red site, inventory mode)
+           docs/01/index.md              (green site, index mode)
+
+   Visual model — every derived tone shares the (h, s) of
+   `--arc100-base` and modulates only the `l` channel via CSS
+   relative-color-syntax. The per-theme override surface is a single
+   HSL literal in `theme-{red,green}.css`:
+
+     [BAND  bg=base                  L=15% (theme value)          ]
+     [band-title  text 12px from left                             ]
+     [BOOK-SUMMARY  bg                L=24%                       ]
+     [····20px····][CHAPTERS  bg      L=32%                       ]
+     [····20px····][chapter  text 12px from left                  ]
+     [····20px····][chapter  text 12px from left                  ]
+     [BOOK-SUMMARY  next book                                     ]
+
+   The 20px strip on the left of `.chapters` shows the band's base
+   color because `.book` is transparent (no background of its own).
+
+   Class names are bare (`.band`, `.book`, `.chapter`) but every
+   selector is scoped under `.arc100-tree` so they don't collide with
+   any other docs page. Two-class specificity (0,2,0) also wins over
+   Material's `.md-typeset h2 / ul / details` rules. */
+
+:root {
+  /* --arc100-base is the per-theme override point. theme-red.css and
+     theme-green.css each set this to one HSL literal; every derived
+     tone below reads h and s from this base via hsl(from ...) and
+     substitutes its own L value. */
+  --arc100-base: hsl(0deg 47% 15%);   /* dark red — overridden per theme */
+
+  /* Row backgrounds — only L modulates between rows. */
+  --arc100-band-bg:    var(--arc100-base);
+  --arc100-book-bg:    hsl(from var(--arc100-base) h s 24%);
+  --arc100-chapter-bg: hsl(from var(--arc100-base) h s 32%);
+  --arc100-divider:    hsl(from var(--arc100-base) h s 58%);
+  --arc100-fg:         #ffffff;
+  --arc100-fg-muted:   rgba(255, 255, 255, 0.72);
+  --arc100-pill-bg:    rgba(255, 255, 255, 0.18);
+  --arc100-row-h:      28px;
+  --arc100-pad-x:      12px;
+  --arc100-indent:     20px;
+
+  /* Project-standard accent-text token — follows per-theme hue
+     deliberately (author direction, 2026-05-25): each project's
+     theme covers all UI colours; there is no "fixed ARC-100 brand
+     red" shared across the two sites. +28% L from band (15% → 43%)
+     keeps the token readable against both default and slate
+     backgrounds. The variable name `--arc100-red-text` becomes a
+     misnomer on the green site; rename to `--arc100-accent-text`
+     is a cosmetic follow-up (out of scope for phase 3.1b). */
+  --arc100-red-text:   hsl(from var(--arc100-base) h s 43%);
+}
+
+/* ===================================================================
+   Material theme palette overrides — the masthead (and tabs bar)
+   carry the same dark-red band base as the master-index band rows.
+   `palette.primary: custom` in mkdocs.yml stops Material from
+   injecting its `[data-md-color-primary=indigo]` rules so these
+   :root values win.
+   =================================================================== */
+
+:root {
+  --md-primary-fg-color:        var(--arc100-base);
+  /* --light calibrated to L=49% (NOT the strict +12% offset that
+     would land at L=27%) to preserve perceived hover lift on hovered
+     nav items / tab strip / search-result hover. Today's pre-D3.2
+     color-mix output sits near ~49% L; author direction (2026-05-25)
+     prioritised hover-affordance continuity over the strict
+     "only L modulates" rule for this one Material derivative. */
+  --md-primary-fg-color--light: hsl(from var(--arc100-base) h s 49%);
+  --md-primary-fg-color--dark:  hsl(from var(--arc100-base) h s 10%);
+  --md-primary-bg-color:        #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+}
+
+/* Active-nav text in both the left sidebar ("Home" / current page)
+   and the right-column TOC (the section the reader is currently
+   scrolled to). Material paints these via:
+       .md-nav__item .md-nav__link--active           — specificity 0,2,0
+       .md-nav__item .md-nav__link--active code      — specificity 0,2,1
+       .md-nav--primary .md-nav__item--active > .md-nav__link
+                                                     — specificity 0,2,0
+   We must match (or exceed) those specificities so the lifted red
+   wins; the previous one-class `.md-nav__link--active` selector
+   (0,1,0) lost the cascade to Material's more-specific rule. */
+.md-nav__item .md-nav__link--active,
+.md-nav__item .md-nav__link--active code,
+.md-nav--primary .md-nav__item--active > .md-nav__link {
+  color: var(--arc100-red-text);
+}
+
+/* Other Material text-colour uses of `--md-typeset-a-color`. These
+   are minor surfaces but pick up the same raw band base unless
+   overridden:
+     .md-meta__link              — page-meta links (last-updated,
+                                   "edit on GitHub", etc., if those
+                                   features are enabled in mkdocs.yml)
+     .md-search-result__more     — "show N more results" toggle in
+                                   the search dropdown
+*/
+.md-meta__link,
+.md-search-result__more > summary > div {
+  color: var(--arc100-red-text);
+}
+
+/* Content links (every `<a>` rendered inside a markdown page body,
+   plus inline `<code>` wrapped in a link, plus footnote-backref
+   markers). Material's per-scheme blocks
+   (`:root, [data-md-color-scheme=default]` and
+   `[data-md-color-scheme=slate]`) re-declare
+   `--md-typeset-a-color: var(--md-primary-fg-color)` — i.e. the
+   raw band base. The variable-level override in the :root block
+   above does not reliably win against those per-scheme rules, so
+   we override the SELECTORS directly here. Specificity ties with
+   Material's `.md-typeset a {...}` but arc100.css loads after the
+   theme CSS in the page head, so source order resolves to us.
+   Hover/focus stays `--md-accent-fg-color` (indigo from the
+   palette) because `.md-typeset a:hover` is a higher-specificity
+   pseudo-class rule and Material defines it. */
+.md-typeset a,
+.md-typeset a code,
+.md-typeset .footnote-backref {
+  color: var(--arc100-red-text);
+}
+
+/* ---------- Page meta + controls (outside the tree) ---------- */
+
+.arc100-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5em;
+  margin: 0.6em 0 1em;
+  font-size: 14px;
+}
+
+.arc100-controls {
+  display: flex;
+  gap: 0.6em;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0.6em 0 1em;
+  padding: 0.6em 0.8em;
+  background: var(--md-code-bg-color, #f5f5f5);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.arc100-controls select,
+.arc100-action {
+  font: inherit;
+  padding: 0.2em 0.55em;
+  border: 1px solid var(--md-default-fg-color--lighter, #ccc);
+  border-radius: 3px;
+  background: var(--md-default-bg-color, #fff);
+  color: var(--md-default-fg-color, #000);
+}
+
+.arc100-action {
+  cursor: pointer;
+}
+
+.arc100-action:hover {
+  background: var(--md-accent-fg-color--transparent, rgba(0, 0, 0, 0.05));
+}
+
+/* ---------- Tree container ---------- */
+
+.arc100-tree {
+  margin: 0.6em 0 2em;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Reset margin/padding/border on every tree-internal div. Two-class
+   specificity beats Material's per-tag typography rules. */
+.arc100-tree .band,
+.arc100-tree .band-title,
+.arc100-tree .book,
+.arc100-tree .book-title,
+.arc100-tree .chapters,
+.arc100-tree .chapter {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+/* ---------- Level 1 — band (only the title row is colored) ---------- */
+
+/* The .band container is transparent — page bg shows through. Only
+   the .band-title row carries the deepest-blue color. This means the
+   20px strip exposed by `.chapters { margin-left: 20px }` reveals the
+   page's very dark background, not band-bg. */
+.arc100-tree .band {
+  background: transparent;
+}
+
+.arc100-tree .band-title {
+  display: flex;
+  align-items: center;
+  height: calc(var(--arc100-row-h) + 6px);
+  padding: 0 var(--arc100-pad-x);
+  background: var(--arc100-band-bg);
+  color: var(--arc100-fg);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  gap: 0.6em;
+  box-shadow: inset 0 -1px 0 var(--arc100-divider);
+}
+
+.arc100-tree .band-title .title {
+  flex: 1;
+}
+
+/* Right-justified "chapters" column header — sits over the count
+   column in the book rows below. */
+.arc100-tree .band-title .count-label {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  color: var(--arc100-fg-muted);
+  white-space: nowrap;
+}
+
+/* ---------- Level 2 — book (transparent shell + opaque title row) ---------- */
+
+/* Book is transparent so page bg shows through. The title row below
+   carries the medium-blue color. */
+.arc100-tree .book {
+  background: transparent;
+}
+
+.arc100-tree .book-title {
+  display: flex;
+  align-items: center;
+  height: var(--arc100-row-h);
+  padding: 0 var(--arc100-pad-x);
+  background: var(--arc100-book-bg);
+  color: var(--arc100-fg);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  gap: 0.6em;
+  box-shadow: inset 0 -1px 0 var(--arc100-divider);
+}
+
+.arc100-tree .book-title:focus-visible {
+  outline: 2px solid var(--arc100-fg);
+  outline-offset: -2px;
+}
+
+.arc100-tree .book-title .id {
+  min-width: 2.4em;
+  font-family: var(--md-code-font-family, ui-monospace, "SFMono-Regular", monospace);
+  font-size: 16px;
+  color: var(--arc100-fg-muted);
+}
+
+.arc100-tree .book-title .title {
+  flex: 1;
+}
+
+.arc100-tree .book-title .count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--arc100-fg-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* Collapse mechanism: data-open="false" hides the chapter list. */
+.arc100-tree .book[data-open="false"] > .chapters {
+  display: none;
+}
+
+/* ---------- Level 3 — chapters list + chapter row ---------- */
+
+.arc100-tree .chapters {
+  margin-left: var(--arc100-indent); /* exposes 20px of band-bg on left */
+  background: var(--arc100-chapter-bg);
+}
+
+.arc100-tree .chapter {
+  display: flex;
+  align-items: center;
+  height: var(--arc100-row-h);
+  padding: 0 var(--arc100-pad-x);
+  color: var(--arc100-fg);
+  font-size: 15px;
+  gap: 0.6em;
+  box-shadow: inset 0 -1px 0 var(--arc100-divider);
+}
+
+.arc100-tree .chapter .id {
+  min-width: 4.4em;
+  font-family: var(--md-code-font-family, ui-monospace, "SFMono-Regular", monospace);
+  font-size: 13px;
+  color: var(--arc100-fg-muted);
+  white-space: nowrap;
+}
+
+.arc100-tree .chapter .title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right-aligned status pill (only present for non-active chapters). */
+.arc100-tree .status {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.18em 0.55em;
+  border-radius: 3px;
+  background: var(--arc100-pill-bg);
+  color: var(--arc100-fg);
+  white-space: nowrap;
+}
+
+.arc100-tree .chapter[data-status="draft"]       .status { background: rgba(255, 167, 38, 0.45); }
+.arc100-tree .chapter[data-status="placeholder"] .status { background: rgba(255, 255, 255, 0.16); }
+.arc100-tree .chapter[data-status="checked-out"] .status { background: rgba(33, 150, 243, 0.55); }
+.arc100-tree .chapter[data-status="superseded"]  .status,
+.arc100-tree .chapter[data-status="deprecated"]  .status { background: rgba(244, 67, 54, 0.45); }
+
+.arc100-tree .chapter[data-status="superseded"],
+.arc100-tree .chapter[data-status="deprecated"] {
+  text-decoration: line-through;
+}
+
+/* ===================================================================
+   ARC-100 lineage badge
+
+   Present on every book and chapter that is contributed by ARC-100
+   itself (YAML `arc_100: true`). In downstream `<PROJECT>-100`
+   projects, this badge marks the slots/titles/intents inherited from
+   the upstream ARC-100 framework — distinguishing them from
+   project-specific allocations (slots 50+ in inherited books, or
+   books in the high-end of the band's range).
+
+   Distinct from the status pill: status is variable per chapter;
+   lineage is a stable identity marker. The badge sits to the LEFT of
+   the status pill in chapter rows, and between title and count in
+   book rows.
+   =================================================================== */
+
+:root {
+  --arc100-lineage-bg: rgba(255, 255, 255, 0.042);
+  --arc100-lineage-border: rgba(255, 255, 255, 0.164);
+}
+
+.arc100-tree .arc-100-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 1px 4px;
+  border: 1px solid var(--arc100-lineage-border);
+  border-radius: 3px;
+  background: var(--arc100-lineage-bg);
+  color: var(--arc100-fg);
+  white-space: nowrap;
+}
+
+/* In chapter rows: the ARC-100 badge takes the right-alignment slot
+   (margin-left: auto), then the status pill sits next to it without
+   auto-margin so they cluster on the right. */
+.arc100-tree .chapter .arc-100-badge {
+  margin-left: auto;
+  margin-right: 0.4em;
+}
+
+.arc100-tree .chapter .status {
+  margin-left: 0;
+}
+
+/* In book rows: the ARC-100 badge takes the right-alignment slot,
+   then the count sits just beyond it. */
+.arc100-tree .book-title .arc-100-badge {
+  margin-left: auto;
+  margin-right: 0.6em;
+}
+
+.arc100-tree .book-title .count {
+  margin-left: 0;
+}
+
+/* ===================================================================
+   Sidebar — distinguish band sections from book sections.
+   Loaded on every page via mkdocs.master.yml extra_css so styling
+   applies wherever the user lands, not just the home page.
+
+   Material's `navigation.sections` feature tags top-level (band)
+   entries with `.md-nav__item--section`. Books are nested below as
+   plain `.md-nav__item--nested` (no --section). We bump bands a
+   couple of points larger, bold them, and add a divider above so they
+   read as major sections — and don't get confused with book labels
+   that happen to lead with a similar-looking number.
+   =================================================================== */
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section {
+  margin-top: 1.4em;
+  padding-top: 0.5em;
+  border-top: 1px solid var(--md-default-fg-color--lightest, rgba(0, 0, 0, 0.07));
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section > label.md-nav__link {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* Books (one level deeper than bands, no --section class) keep the
+   default weight but are nudged just enough to read as a tier below
+   the band header. */
+.md-nav--primary .md-nav__item--section .md-nav__item--nested > label.md-nav__link {
+  font-weight: 500;
+}
+
+/* ---------- Active chapters are <a> — reset link styling, add hover ---------- */
+
+/* Specificity 0,2,1 beats Material's `.md-typeset a` (0,1,1).
+   We make <a>.chapter look identical to <div>.chapter (no underline,
+   no link color) and add a brighter-background hover to signal that
+   the row is clickable. */
+.arc100-tree a.chapter,
+.arc100-tree a.chapter:visited,
+.arc100-tree a.chapter:hover,
+.arc100-tree a.chapter:focus,
+.arc100-tree a.chapter:active {
+  color: var(--arc100-fg);
+  text-decoration: none;
+}
+
+.arc100-tree a.chapter {
+  cursor: pointer;
+}
+
+.arc100-tree a.chapter:hover {
+  /* One notch brighter than the chapter base (L=32% → L=40%). */
+  background: hsl(from var(--arc100-base) h s 40%);
+}
+
+.arc100-tree a.chapter:focus-visible {
+  outline: 2px solid var(--arc100-fg);
+  outline-offset: -2px;
+}
+
+/* ===================================================================
+   Right-column hover description overlay.
+
+   When the user hovers over a row in `.arc100-tree` that carries
+   `data-description="…"`, arc100.js position-anchors a fixed-position
+   panel over Material's right-hand TOC sidebar showing that text.
+   Vertical position tracks the mouse Y; the JS clamps the top edge so
+   the box always stays inside the viewport.
+
+   This element is appended to `<body>` (outside `.arc100-tree`) so
+   it isn't clipped by the tree's `overflow: hidden`. It's purely
+   informational — `pointer-events: none` lets the mouse pass through
+   to whatever's underneath.
+   =================================================================== */
+
+.arc100-desc-overlay {
+  position: fixed;
+  display: none;
+  z-index: 1000;
+  /* Half the previous padding — keeps the panel tight around its
+     text now that the type is sized for readability rather than
+     paragraph rhythm. */
+  padding: 0.5em 0.6em;
+  /* 10% opaque white — a subtle lighter wash over the page bg.
+     Works against the dark slate theme; light-theme users will see
+     a near-invisible panel, which is acceptable for an informational
+     hover and can be revisited if/when a dedicated light-theme rule
+     is needed. */
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--md-default-fg-color, #1a1a1a);
+  border: none;
+  border-radius: 4px;
+  /* Absolute 16px Roboto, deliberately decoupled from Material's
+     rem scaling (Material commonly sets html { font-size: 125% }
+     which would balloon `1rem`). 16px is the body-readable target.
+     Roboto matches the Material theme's primary type face. */
+  font-family: Roboto, "Helvetica Neue", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  pointer-events: none;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+
+.arc100-desc-overlay.visible {
+  display: block;
+}
+
+/* Heading row above the description body. Hook emits "Band 00 thru
+   09", "Book 01", or "Chapter 01-03" via `data-desc-label`; JS copies
+   that into this span. Same 16px Roboto as the body (inherited) so
+   the label and description share rhythm; uses the project-wide
+   red-text mix (`--arc100-red-text`, 60% base / 40% white) so all
+   red text in the ARC-100 docs sits on one shared shade.
+
+   Hidden when empty so rows without a label (e.g. legacy data) don't
+   leave a blank slot. */
+.arc100-desc-overlay .arc100-desc-label {
+  display: block;
+  margin-bottom: 0.3em;
+  font-weight: 600;
+  color: var(--arc100-red-text);
+}
+
+.arc100-desc-overlay .arc100-desc-label:empty {
+  display: none;
+}
+
+/* ===================================================================
+   Critical-decisions banner — surfaced at the top of the home page
+   when ARC-100-SYNC/state/pending_decisions.md exists. Rendered as a
+   dark-red callout matching the band-base brand color so it reads as
+   urgent against both the default and slate schemes.
+   =================================================================== */
+
+.md-typeset .arc100-critical-banner {
+  margin: 1em 0 1.5em;
+  padding: 1em 1.2em;
+  background: var(--arc100-base);
+  color: var(--arc100-fg);
+  border-radius: 4px;
+  border: 2px solid hsl(from var(--arc100-base) h s 25%);
+}
+
+.md-typeset .arc100-critical-banner h2 {
+  margin-top: 0;
+  color: var(--arc100-fg);
+  font-size: 18px;
+}
+
+.md-typeset .arc100-critical-banner a {
+  color: var(--arc100-fg);
+  text-decoration: underline;
+}
+
+/* ===================================================================
+   C4 architecture diagrams — embedded in chapter prose via the
+   c4-pan-zoom.js init script. The container fits the .md-content
+   column at the rendered site's default width; svg-pan-zoom inside
+   gives wheel-zoom (Ctrl/Cmd+wheel) and click-drag pan to explore
+   diagrams that exceed the column. See chapter 00-06 §00-06.10 for
+   the rendering pipeline.
+   =================================================================== */
+
+.md-typeset .c4-diagram {
+  /* Fit the main content column by default; the SVG inside scales to
+     fit and pan/zoom takes over from there. */
+  display: block;
+  width: 100%;
+  height: 540px;          /* readable initial viewport; pan/zoom for more */
+  margin: 1.5em 0;
+  border: 1px solid var(--md-default-fg-color--lightest, #e0e0e0);
+  border-radius: 4px;
+  background: var(--md-default-bg-color, #fff);
+  /* position:relative is required so the svgPanZoom %-indicator (which
+     positions itself absolutely inside the container) resolves against
+     the c4-diagram box rather than the page. */
+  position: relative;
+  cursor: grab;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.md-typeset .c4-diagram:active {
+  cursor: grabbing;
+}
+
+.md-typeset .c4-diagram svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Flow svgPanZoom — cursor feedback during drag-pan. The library toggles
+   .panning on the SVG element while the user is panning. Replaces the
+   previous .svg-pan-zoom-control rules from the retired third-party
+   library. */
+.md-typeset .c4-diagram svg.panning {
+  cursor: grabbing;
+}
+
+/* Flow svgPanZoom — auto-managed zoom-level indicator. The library
+   appends a <div class="svgpz-zoom-level"> inside the container and
+   shows the current zoom percentage for ~3s after a wheel event. */
+.md-typeset .c4-diagram .svgpz-zoom-level {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: sans-serif;
+  font-size: 4rem;
+  font-weight: 200;
+  color: #888;
+  opacity: 0;
+  transition: opacity 400ms ease-in-out;
+  pointer-events: none;
+  user-select: none;
+}
+
+.md-typeset .c4-diagram .svgpz-zoom-level.visible {
+  opacity: 0.6;
+  transition: opacity 150ms ease-in-out;
+}
+
+.md-typeset .c4-diagram-hint {
+  font-size: 0.78em;
+  color: var(--md-default-fg-color--light, #666);
+  margin-top: -1em;
+  margin-bottom: 1.5em;
+  font-style: italic;
+}

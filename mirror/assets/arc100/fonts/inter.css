@@ -1,0 +1,39 @@
+/* ===================================================================
+   Inter font face declarations — three locally-hosted weights/styles.
+   Source: rsms/inter v4.x via raw.githubusercontent.com (full Unicode
+   set; not Latin-subsetted because the docs site occasionally renders
+   non-Latin punctuation in chapter prose). Total payload ~340 KB
+   across the three files, cached after first load.
+   Lives at docs/assets/fonts/ — a universal location accessible to
+   every book in the ARC-100 system, not scoped to any one chapter.
+   See chapter 00-06 §00-06.10.3.7 (typography pass) for the rationale
+   and the weight-to-role mapping.
+
+   font-display: swap — fallback (sans-serif) renders immediately on
+   first paint; Inter swaps in once the woff2 has loaded. The right
+   trade-off for a docs site: no FOIT, slightly noticeable FOUT.
+   =================================================================== */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("Inter-Light.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("Inter-SemiBold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 200;
+  font-display: swap;
+  src: url("Inter-ExtraLightItalic.woff2") format("woff2");
+}

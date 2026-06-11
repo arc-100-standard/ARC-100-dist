@@ -1,0 +1,5 @@
+/* ARC-100 green theme — dark forest green `--arc100-base`. Loaded
+   by mkdocs.arc100project.yml AFTER arc100.css so this :root rule
+   wins. Same S/L as red theme; only hue differs. See
+   assets/arc100/arc100.css for the H/S/L derivation pattern. */
+:root { --arc100-base: hsl(120deg 47% 15%); }
