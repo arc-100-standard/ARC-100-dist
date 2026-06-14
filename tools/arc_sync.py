@@ -132,13 +132,34 @@ def load_config(path: Path) -> Config:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise SyncParseError("config root is not a mapping")
-    for required in ("project_name", "local_index_path"):
+    # project_name is the ONLY required key; local_index_path / local_chapter_root
+    # convention-derive from it when absent (see below).
+    for required in ("project_name",):
         if not raw.get(required):
             raise SyncParseError(f"config missing required field: {required}")
-    local_index = Path(str(raw["local_index_path"]))
-    chapter_root = Path(str(raw.get("local_chapter_root") or local_index.parent))
+    name = str(raw["project_name"])
+    # Shape gate (security-critical): project_name fuses into the derived index
+    # filename segment (docs/01/01-01_<name>_Index.md), so post-interpolation
+    # contained_path can no longer reject a hostile name ('01-01_..' is a literal
+    # dir name, not a '..' traversal segment). Constrain to a single path segment
+    # here — this is the PRIMARY control for the derived path. It also keeps the
+    # marker pair (<!-- <name>-INDEX-START -->) sane.
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+        raise SyncParseError(
+            "project_name must be a single path segment: letters, digits, `._-`, "
+            f"no leading dot, no `/` or whitespace (got {name!r})"
+        )
+    # Convention-derivation (author-clarified): the working index is chapter 01-01
+    # INSIDE docs_dir, and the chapter root is `docs` — matches the dogfood, the
+    # model layout. Explicit keys override by truthiness; an absent key falls to
+    # the convention (NOT local_index.parent, NOT project_name — the retired
+    # namespace shape; see phase 3a §3.1).
+    local_index = (Path(str(raw["local_index_path"])) if raw.get("local_index_path")
+                   else Path(f"docs/01/01-01_{name}_Index.md"))
+    chapter_root = (Path(str(raw["local_chapter_root"])) if raw.get("local_chapter_root")
+                    else Path("docs"))
     return Config(
-        project_name=str(raw["project_name"]),
+        project_name=name,
         local_index_path=local_index,
         local_chapter_root=chapter_root,
     )
@@ -1965,6 +1986,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: config not found: {config_path}", file=sys.stderr)
             return 2
         config = load_config(config_path)
+        # Fail-fast containment (security-critical): a hostile EXPLICIT
+        # local_index_path override (e.g. ../escape.md) raises PathEscapeError
+        # here — before any mirror/seed write runs. The DERIVED path is guarded
+        # upstream by load_config's project_name shape gate (the fused filename
+        # segment defeats post-interpolation containment for the derived case).
+        contained_path(target, config.local_index_path.as_posix())
 
         payload_files = walk_mirror_tree(source)
         index_rel = find_payload_index(payload_files)

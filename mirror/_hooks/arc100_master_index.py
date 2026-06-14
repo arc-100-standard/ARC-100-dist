@@ -77,10 +77,10 @@ _SHARED_ASSETS_SRC = _REPO_ROOT / "assets" / "arc100"
 _INVENTORY_SOURCE = "00-01_ARC-100_Standard_Inventory.md"
 _INVENTORY_HOME = "index.md"
 
-# Index mode (green site) — source under docs_dir/01/; hook output at
-# docs_dir root so green and red have symmetric "/" canonical URLs.
+# Index mode (green site) — the source under docs_dir/01/ is convention-derived
+# per project in _build_project_index (01/01-01_<scheme_name>_Index.md); the hook
+# output goes to docs_dir root so green and red have symmetric "/" canonical URLs.
 # Phase 3.1c brings forward phase 3.1e's green-site root-index move.
-_PROJECT_INDEX_SOURCE = "01/01-01_ARC-100-Project_Index.md"
 _PROJECT_INDEX_HOME = "index.md"
 
 def _build_marker_regex(marker_base: str) -> re.Pattern[str]:
@@ -96,8 +96,8 @@ def _build_marker_regex(marker_base: str) -> re.Pattern[str]:
         ```
         <!-- {marker_base}-END -->
 
-    Mirrors conform.py's extract_yaml regex (L300-L307) for byte-shape
-    parity with the conform engine. Replaces the two pre-D1 module-level
+    Mirrors arc_sync.py's extract_yaml regex for byte-shape
+    parity with the sync engine. Replaces the two pre-D1 module-level
     constants (_MARKER_INVENTORY_RE / _MARKER_PROJECT_RE) so the marker
     base can be derived per-build from project_name (phase 4b D1).
     """
@@ -113,21 +113,26 @@ The ARC-100 conformance tool has queued one or more decisions that
 require human judgment. Run `/resolve-arc-100-issues` in Claude Code
 to begin guided resolution.
 
-See `ARC-100-SYNC/state/pending_decisions.md` for the full list.
+See `.arc100/PENDING-INDEX-DECISIONS.yml` for the queued decisions; set each `decision:` to accept or reject, then re-run the sync to apply.
 
 </div>
 
 """
 
 
-def _apply_critical_banner(home_md: str, project_root: Path, project_name: str) -> str:
-    """Return home_md with a critical-decisions banner prepended if
-    ARC-100-SYNC/state/pending_decisions.md exists at project_root.
+def _apply_critical_banner(home_md: str, repo_root: Path, project_name: str) -> str:
+    """Return home_md with a critical-decisions banner prepended if the
+    transient decision file `.arc100/PENDING-INDEX-DECISIONS.yml` is present
+    at repo_root (the `--target` root).
+
+    Detection is by file PRESENCE only — arc_sync.py writes the file solely
+    on escalation and archives + unlinks it on resolution, so its mere
+    existence is the whole signal (no YAML parse, no status field).
 
     The banner inserts after the closing front-matter `---` and before
     the first H1. If no front-matter is present, the banner goes at the top.
     """
-    pending = project_root / "ARC-100-SYNC" / "state" / "pending_decisions.md"
+    pending = repo_root / ".arc100" / "PENDING-INDEX-DECISIONS.yml"
     if not pending.exists():
         return home_md
     # TM-4b-6: escape inside the helper so future call sites cannot
@@ -146,7 +151,7 @@ def _load_project_name(project_root: Path, mode: str) -> str:
     """Read project_name (the marker SCHEME name) from
     ARC-100-SYNC.config.yml if present; else return the default "ARC-100".
 
-    The scheme name is what conform.py composes markers from
+    The scheme name is what arc_sync.py composes markers from
     (`f"{scheme_name}-INDEX-START"`). It differs from the user-facing
     DISPLAY name when ARC-100 renders its own in-repo project:
 
@@ -177,7 +182,7 @@ def _load_project_name(project_root: Path, mode: str) -> str:
     silently returning the default and producing confusing output.
 
     TM-4b-1: yaml.safe_load is the only YAML call (matches the hook's
-    existing index-block parses and conform.py's extract_yaml).
+    existing index-block parses and arc_sync.py's extract_yaml).
     """
     # mode is accepted for call-site symmetry (inventory vs index) but
     # the default scheme name is the same: "ARC-100".
@@ -227,15 +232,16 @@ def _load_local_index_path(project_root: Path) -> str | None:
     """Read local_index_path from ARC-100-SYNC.config.yml if present.
 
     Returns the raw string (caller resolves it relative to project_root,
-    matching conform.py L113 which treats local_index_path as repo-root-
+    matching arc_sync.py which treats local_index_path as repo-root-
     relative against CWD = repo root). Returns None when the config is
     absent or the key is unset/empty — caller falls back to the
-    docs_dir-relative _PROJECT_INDEX_SOURCE constant.
+    docs_dir-relative working-index default parameterized from the scheme
+    project_name (01/01-01_<scheme_name>_Index.md; convention-derivation).
 
     Joining local_index_path to docs_dir would double-prefix "docs/"
     (a downstream's "docs/00/00-01_…" would become "docs/docs/00/…");
     the project-root base is deliberate and must not be conflated with
-    the default constant's docs_dir base.
+    the derived default's docs_dir base.
     """
     config_path = project_root / "ARC-100-SYNC.config.yml"
     if not config_path.exists():
@@ -368,6 +374,9 @@ def _build_inventory(config) -> None:
     tree_html = _render_tree(data, docs_dir, mode="inventory")
     page = _render_page_inventory(data, tree_html, counts, project_name)
 
+    # project_root is already docs_dir.parent (the --target root). The standard's
+    # own render is never a sync --target, so .arc100/ never exists here and this
+    # banner is a permanent no-op.
     page = _apply_critical_banner(page, project_root, project_name=project_name)
 
     out = docs_dir / _INVENTORY_HOME
@@ -384,22 +393,32 @@ def _build_project_index(config) -> None:
     docs_dir = Path(config["docs_dir"])
 
     # Q2: index-mode source is config-aware. local_index_path resolves
-    # against project_root (= docs_dir.parent) to match conform.py L113's
+    # against project_root (= docs_dir.parent) to match arc_sync.py's
     # repo-root-relative convention; default falls back to the docs_dir-
-    # relative _PROJECT_INDEX_SOURCE constant. Joining local_index_path
+    # relative working-index default below. Joining local_index_path
     # to docs_dir would double-prefix "docs/" — see _load_local_index_path.
     project_root = docs_dir.parent
+    # Convention-derivation (hook-side half; mirrors arc_sync.py load_config):
+    # when the config omits local_index_path / local_chapter_root, derive them
+    # from the scheme project_name. scheme_name is loaded ONCE here (reused for
+    # the display-name / marker-base derivation below — NOT a second
+    # _load_project_name call, which would change the red/no-config contract).
+    # project_index_default parameterizes the canonical 01/01-01 slot's name
+    # segment per project: a hardcoded "ARC-100-Project" name would be wrong for
+    # a downstream like FLOW-100, whose working index is 01/01-01_FLOW-100_Index.md.
+    scheme_name = _load_project_name(project_root, "index")
+    project_index_default = f"01/01-01_{scheme_name}_Index.md"  # docs_dir-relative
     local_index_path = _load_local_index_path(project_root)
     if local_index_path is not None:
         source = project_root / local_index_path
     else:
-        source = docs_dir / _PROJECT_INDEX_SOURCE
+        source = docs_dir / project_index_default
     if not source.exists():
         return
 
     _copy_shared_assets(docs_dir)
 
-    # Resolve the config's scheme project_name (used by conform.py to
+    # Resolve the config's scheme project_name (used by arc_sync.py to
     # compose markers as f"{scheme_name}-INDEX") and derive the
     # user-facing display name + the ARC-100-Project flag:
     #
@@ -418,12 +437,13 @@ def _build_project_index(config) -> None:
     #
     # The "-PROJECT" suffix is the unique discriminator: it appears
     # only in ARC-100's own in-repo-project scheme_name (deliberately,
-    # so conform.py's marker base "ARC-100-PROJECT-INDEX" distinguishes
+    # so arc_sync.py's marker base "ARC-100-PROJECT-INDEX" distinguishes
     # ARC-100 Project's index source file from the standard's inventory
     # source file on disk — same project_name "ARC-100" rendered as
     # two sites). A downstream's scheme_name never carries the suffix
     # (its single site needs no on-disk differentiation from itself).
-    scheme_name = _load_project_name(project_root, "index")
+    # scheme_name was resolved above (convention-derivation needs it before the
+    # source resolution); derive the display name + ARC-100-Project flag from it.
     is_arc100_project = scheme_name.endswith("-PROJECT")
     project_name = scheme_name[: -len("-PROJECT")] if is_arc100_project else scheme_name
     # Phase 5b D1: the rendered home-page title prefers the human-readable
@@ -459,11 +479,13 @@ def _build_project_index(config) -> None:
     # stripping local_chapter_root yields the docs_dir-relative target,
     # and the basename is the link's display text. local_general_path is
     # optional — None omits the "General introduction" sentence.
-    chapter_root = _load_local_chapter_root(project_root)
+    # Convention default: an absent local_chapter_root falls to "docs" (mirrors
+    # arc_sync.py load_config; matches the dogfood — NOT scheme_name).
+    chapter_root = _load_local_chapter_root(project_root) or "docs"
     index_link_target = (
         _strip_chapter_root(local_index_path, chapter_root)
         if local_index_path is not None
-        else _PROJECT_INDEX_SOURCE
+        else project_index_default
     )
     index_link_display = Path(index_link_target).name
     local_general_path = _load_local_general_path(project_root)
@@ -486,7 +508,10 @@ def _build_project_index(config) -> None:
         general_link_display=general_link_display,
     )
 
-    page = _apply_critical_banner(page, docs_dir, project_name=project_name)
+    # .arc100/ sits at the --target root (= docs_dir.parent when docs_dir is
+    # "docs"), not under docs_dir; pass the repo root so the presence probe
+    # resolves. (Pre-3a this passed docs_dir — the green-site probe bug.)
+    page = _apply_critical_banner(page, docs_dir.parent, project_name=project_name)
 
     out = docs_dir / _PROJECT_INDEX_HOME
     _write_if_changed(out, page)

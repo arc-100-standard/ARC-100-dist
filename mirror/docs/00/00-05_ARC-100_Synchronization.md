@@ -2,17 +2,19 @@
 title: 00-05 ARC-100 Synchronization
 arc_100_id: "00-05"
 status: active
-keywords: [arc-100-sync, conform, synchronization, ulid, downstream, install, supply-chain]
+keywords: [arc-100-sync, arc_sync, synchronization, ulid, downstream, clone, supply-chain]
 agent_summary: |
-  Intent for the ARC-100 synchronization system: how a downstream
+  Intent for the ARC-100 synchronization system: how an adopting
   `<PROJECT>-100` documentation index stays in step with upstream
   ARC-100 over time. Covers the identity model (ULID-keyed entries),
-  the conform contract (which diffs auto-apply, which require human
-  judgment), the distribution shape (curl-installable, embedded file
-  list, moving + immutable tags), the security posture (curl-to-bash
-  + TOFU on moving tag), and the open architectural questions still
-  worth review. Implementation is owned by phase_2a + phase_2b plans
-  in `versions/v1/implementation/`.
+  the sync-and-rectify contract (which index diffs auto-apply, which
+  escalate for human judgment), the distribution shape (a depth-1 clone
+  of the public mirror, run `arc_sync.py`, mirror/seed file classes),
+  the security posture (you are running upstream code; integrity from
+  the public mirror + immutable `vN` tags + an out-of-band digest), and
+  the open architectural questions still worth review. Implementation is
+  owned by the v2 phase plans in `versions/v2/implementation/` and the
+  built tool `ARC-100-SYNC/scripts/arc_sync.py`.
 prerequisites: ["00-00_ARC-100_General.md", "00-01_ARC-100_Standard_Inventory.md"]
 companions: ["00-00_ARC-100_General.md"]
 ---
@@ -20,23 +22,25 @@ companions: ["00-00_ARC-100_General.md"]
 ## 00-05 ARC-100 Synchronization
 
 > **What this chapter is.** The architectural intent for ARC-100-SYNC,
-> the portable toolkit that keeps a downstream `<PROJECT>-100`
+> the portable toolkit that keeps an adopting `<PROJECT>-100`
 > documentation index in step with upstream ARC-100 over time. It
-> describes the identity model, the conform contract, the judgment
-> surface, the distribution shape, and the security posture. It is the
-> reference text against which the implementation plans are validated.
+> describes the identity model, the sync-and-rectify contract, the
+> judgment surface, the distribution shape, and the security posture. It
+> is the reference text against which the implementation is validated.
 >
 > **What this chapter is not.** A step-by-step implementation guide.
-> The mechanics — script bodies, function inventories, verification
-> commands — live in the implementation plans at
-> `versions/v1/implementation/phase_2a.md` and `phase_2b.md`. This
-> chapter records *why* and *what shape*; the plans record *how*.
+> The mechanics — the tool body, function inventory, verification
+> commands — live in the v2 implementation plans under
+> `versions/v2/implementation/` and the built tool
+> `ARC-100-SYNC/scripts/arc_sync.py`. This chapter records *why* and
+> *what shape*; the plans and the code record *how*.
 >
-> **Status.** This chapter is intent-first: it was authored before
-> implementation began so the architecture can be reviewed and refined
-> against a deliberate target rather than emerging by accretion from
-> code. Open questions identified during drafting are listed in
-> §00-05.12.
+> **Status.** This chapter was authored intent-first — before
+> implementation began — so the architecture could be reviewed against a
+> deliberate target rather than emerging by accretion from code. It has
+> since been revised to the clone-and-run mirror model the v2 phases
+> actually built (see the Revisions footer). Open questions still worth
+> deliberation are listed in §00-05.12.
 
 ### 00-05.1 — Why ARC-100-SYNC exists { #c4-system-context }
 
@@ -105,7 +109,7 @@ Three rules govern its lifetime:
   its original entry. The slot may be reclaimed and re-allocated, but
   the new occupant gets a fresh ULID.
 
-The ULID is the only key the conform engine trusts. Every diff,
+The ULID is the only key `arc_sync.py` trusts. Every diff,
 classification, and resolution is keyed by ULID, not by slot id.
 
 Every book and chapter in ARC-100 carries an `arc_100_ulid`. The value
@@ -118,193 +122,261 @@ own first consumer of the standard it defines. The payoff for the
 librarian maintaining ARC-100 over time is a stable join key: it can
 match an entry to its lineage across a renumber, a retitle, or a status
 transition without ambiguity, which is precisely what makes the
-mechanical-vs-judgment split of the conform contract (§00-05.3)
+mechanical-vs-judgment split of the sync-and-rectify contract (§00-05.3)
 possible.
 
-### 00-05.3 — The conform contract { #c4-conform-contract }
+### 00-05.3 — The sync-and-rectify contract { #c4-conform-contract }
 
-The conform engine (`ARC-100-SYNC/scripts/conform.py`) embodies a
-deliberate split: **deterministic diffs auto-apply; ambiguous diffs
-require explicit human judgment**. The split is not arbitrary; it
-follows a single test.
+ARC-100-SYNC does two different jobs, and keeping them distinct is the
+spine of the whole system:
 
-> **Auto-apply test.** A diff auto-applies if and only if (a) the
-> outcome of applying it is uniquely determined by the upstream
-> entry and the local entry alone, with no project-context call
-> required, and (b) the diff does not touch any entry that the
-> downstream project owns (`arc_100: false`).
+- **Sync** is *delivery*. `arc_sync.py` lands the upstream payload onto
+  disk — the Book 00 chapter bodies, the build hook, the assets, and the
+  ARC-100 index itself — by file class (§00-05.5). That includes
+  `docs/00/00-01_ARC-100_Standard_Inventory.md`, the upstream index,
+  which is freely overwritten on every run because Book 00 is an
+  immutable read-only mirror downstream (00-00 §00-00.11). Sync is a copy
+  problem with a hash check and a backup; it needs no judgment.
+- **Rectify** is *reconciliation*. The (possibly incremented) upstream
+  index has to be folded into the project's **working index** — chapter
+  **01-01** at `docs/01/01-01_<PROJECT>-100_Index.md`, the project-owned
+  index the single mkdocs site actually renders from. That fold is a
+  3-way ULID reconcile (§00-05.4), and it is a judgment problem the tool
+  *facilitates* rather than a copy it performs: deterministic diffs
+  auto-apply; anything ambiguous escalates to a decision file for a human
+  to accept or reject, and the answer applies on the next run (§00-05.6).
 
-Diffs that fail either clause queue to `pending_decisions.md` for the
-human-in-the-loop resolution flow (§00-05.6).
+The split between auto-apply and escalate follows a single test.
 
-The contract is intentionally conservative. The cost of a false-
-positive queue is one user click on `RESOLVED: ...`; the cost of a
-false-positive auto-apply is silently rewritten downstream content.
-The conform engine pays the former in preference to the latter.
+> **Auto-apply test.** An index diff auto-applies if and only if (a) the
+> outcome of applying it is uniquely determined by the upstream entry,
+> the local entry, and the recorded `BASE` alone, with no project-context
+> call required, and (b) the diff does not touch any entry the project
+> owns (`arc_100: false`).
+
+Diffs that fail either clause escalate to
+`.arc100/PENDING-INDEX-DECISIONS.yml` for the human-in-the-loop
+resolution flow (§00-05.6). Escalation is **atomic-batch**: if any item
+in a run escalates, *no* index change from that run is applied — the
+whole batch waits in the decision file until a human answers it.
+
+The contract is intentionally conservative. The cost of a false-positive
+escalation is one `accept`/`reject` choice in the decision file; the cost
+of a false-positive auto-apply is silently rewritten project content.
+`arc_sync.py` pays the former in preference to the latter.
 
 #### 00-05.3.1 — Components and composition
 
-ARC-100-SYNC is a folder (`ARC-100-SYNC/`) of cooperating components.
-The engine, the agent, the slash commands, the build hooks, the config
-template, and the per-project state collaborate to make routine
-upstream changes mechanical and subtle ones reviewable:
+ARC-100-SYNC is delivered as a depth-1 clone of the public mirror; its
+payload is a tree of cooperating components. The tool, the agent, the
+slash commands, the build hook, the seeded config, and the per-project
+state under `.arc100/` collaborate to make routine upstream changes
+mechanical and subtle ones reviewable:
 
 | Component | Role |
 | --- | --- |
-| `scripts/ulid.py` | Mints the stable 26-character ULID identity for each book and chapter entry (§00-05.2). |
-| `scripts/conform.py` | The deterministic conform engine: fetches the upstream index, diffs it against the local index by ULID, auto-applies the safe changes within the §00-05.5 bounds, and queues the rest. |
-| `scripts/install.sh` | Self-contained `curl`-to-`bash` bootstrap with an embedded file list; fetches the toolkit into a downstream project (§00-05.8). |
-| `templates/agents/arc-100-librarian.md` | The ULID-aware chapter-discovery + index-curation agent, including the Resolution skill that walks a human through queued decisions (§00-05.6). |
+| `tools/ulid.py` | Mints the stable 26-character ULID identity for each book and chapter entry (§00-05.2). |
+| `tools/arc_sync.py` | The sync-and-rectify tool: delivers the payload by file class, reconciles the upstream index against the project's working index by ULID, auto-applies the safe changes within the §00-05.5 bounds, and escalates the rest. Self-contained — Python 3 stdlib + PyYAML, no network. |
+| `mirror/docs/00/00-0X_*.md` | The Book 00 chapter bodies, delivered mirror-class (overwritten when upstream changes; a locally-edited copy is backed up first). |
+| `mirror/docs/00/00-01_ARC-100_Standard_Inventory.md` | The upstream ARC-100 index, delivered mirror-class as read-only reference; the project never renders from it (§00-05.5 / 00-00 §00-00.10.1). |
+| `mirror/_hooks/arc100_master_index.py` | mkdocs hook that generates the rendered index home page and prepends the critical-decisions banner (§00-05.6). |
+| `templates/agents/arc-100-librarian.md` | The ULID-aware chapter-discovery + index-curation agent, including the Resolution skill that fills in each queued decision (§00-05.6). Delivered to `.claude/agents/` (phase 4). |
 | `templates/agents/likec4-author.md` | The LikeC4 model-authoring agent (architecture model + embedded views; see 00-06). |
-| `templates/commands/conform-to-arc-100.md` | Slash command — runs `conform.py`, surfaces the exit code, recommends `/resolve-arc-100-issues` on findings. |
-| `templates/commands/resolve-arc-100-issues.md` | Slash command — dispatches the librarian's Resolution skill against the pending-decisions queue. |
-| `templates/config/ARC-100-SYNC.config.example.yml` | Annotated config template; a downstream copies it to `ARC-100-SYNC.config.yml` and edits its project-specific lines. |
-| `templates/hooks/arc100_sync_check.py` | mkdocs hook that fires `conform.py` on every mkdocs startup and re-fires hourly during `serve`, detached and fire-and-forget (§00-05.10). |
-| `templates/hooks/arc100_master_index.py` | mkdocs hook that generates the rendered index home page and prepends the critical-decisions banner (§00-05.6). |
-| `templates/` (config, assets, fonts, `architecture-modeling/`), `platforms/` | The distributed configuration standard and toolchain (site config, home-page assets + Inter fonts, the LikeC4 toolchain, the macOS Node bootstrap) — see §00-05.8.1 / §00-05.8.2. The Book 00 chapter *content* is NOT staged here: the installer fetches it directly from the `master-vault/docs/00/` production-of-record (single source of truth — no twin to drift), landing it at the downstream's `docs/00/`. |
-| `state/` | Per-project runtime state: `pending_decisions.md`, `last_sync.json`, `sync_check.log`. Gitignored — only `.gitkeep` is tracked. |
+| `templates/commands/sync-arc-100.md` | Slash command `/sync-arc-100` — clones the mirror, runs `arc_sync.py --target .`, surfaces the 0/1/2 exit code. |
+| `templates/commands/resolve-arc-100-issues.md` | Slash command `/resolve-arc-100-issues` — dispatches the librarian's Resolution skill to fill in the decision file's `decision:` cells; the *next* `arc_sync.py` run applies them. |
+| `seed/ARC-100-SYNC.config.example.yml` | Annotated config template, delivered seed-class (copy-if-absent); a project copies it to `ARC-100-SYNC.config.yml` and sets `project_name` (§00-05.8). |
+| `seed/` (config, assets, placeholders) + `mirror/` (assets, fonts, the LikeC4 toolchain) | The distributed configuration standard and toolchain — site config and the standalone Architectural-Model page seeded copy-if-absent; home-page assets + Inter fonts + the hook delivered mirror-class (§00-05.8.1 / §00-05.8.2). |
+| `.arc100/` (per-project state, created by the tool) | Durable state at `.arc100/state.yml` (release pointers, synced-file hashes, the index `BASE` snapshot); the transient `.arc100/PENDING-INDEX-DECISIONS.yml`; dated `.arc100/backups/`; answered files archived under `.arc100/decisions-archive/`. Lives at the project root, outside any `docs_dir`. |
 
-The three layers the conform contract relies on — the **engine**, the
-**banner mechanic**, and the **distribution** that delivers them —
-compose as follows:
+The three layers the contract relies on — the **tool**, the **banner
+mechanic**, and the **distribution** that delivers them — compose around
+the sync-then-rectify shape:
 
 ```text
 upstream ARC-100 repo
-  │ git tag ARC-100-CURRENT (moving)
-  │ git tag ARC-100.1, ARC-100.2, ... (immutable per-version)
+  │ git push main            (current content — HEAD of main)
+  │ git tag vN (immutable)   (index version — bumps only on entry add/remove)
   ▼
-downstream <PROJECT>-100 repo
+public mirror: titanium4638/ARC-100-dist
+  │ depth-1 clone (per sync)
+  ▼
+adopting <PROJECT>-100 repo
   │
-  ├─ ARC-100-SYNC/scripts/conform.py
-  │     │ deterministic part:
-  │     │   - fetch upstream index by ULID
-  │     │   - diff vs local
-  │     │   - apply: new entries (no conflict),
-  │     │            metadata changes (same ULID),
-  │     │            renumbers (no collision)
-  │     │   - queue: collisions, deprecations, removals,
-  │     │            malformed rows, SHA drift, bulk change
+  ├─ python3 <clone>/tools/arc_sync.py --target .
+  │     │ SYNC (delivery, by file class):
+  │     │   - mirror/ → relpath-preserving onto disk
+  │     │       (Book 00 bodies, the upstream index, the hook, assets);
+  │     │       hash-detect local edits, back up before overwrite
+  │     │   - seed/  → copy-if-absent (config, placeholders)
   │     │
-  │     └─ writes ARC-100-SYNC/state/pending_decisions.md
-  │            when human judgment is needed
+  │     │ RECTIFY (3-way ULID reconcile of the index):
+  │     │   BASE  = .arc100/state.yml index_snapshot
+  │     │   NEW   = the synced upstream index
+  │     │   LOCAL = the project's working index (docs/01/01-01_…)
+  │     │   - auto-apply: deterministic diffs within the §00-05.5 bounds
+  │     │   - escalate (atomic batch): writes
+  │     │       .arc100/PENDING-INDEX-DECISIONS.yml, applies nothing
+  │     │
+  │     └─ exit 0 (clean) · 1 (decisions pending) · 2 (error)
   │
   ├─ mkdocs hook (_hooks/arc100_master_index.py)
   │     │ on build:
-  │     │   - reads pending_decisions.md if present
+  │     │   - detects .arc100/PENDING-INDEX-DECISIONS.yml by file presence
   │     │   - prepends "CRITICAL <PROJECT>-100 INDEX DECISIONS NEEDED"
   │     │     banner to the generated home page (index.md)
   │
   └─ /resolve-arc-100-issues slash command
-        │ dispatches the arc-100-librarian agent with its
-        │ Resolution skill, which walks the user through each
-        │ pending decision, migrates content, executes the
-        │ resolutions, and deletes pending_decisions.md when
-        │ all are resolved
+        │ dispatches the arc-100-librarian agent with its Resolution
+        │ skill, which walks the user through each pending decision and
+        │ fills in its decision: (accept | reject). The NEXT arc_sync.py
+        │ run applies the answers and archives the decision file.
 ```
 
-### 00-05.4 — Two modes: bootstrap and update
+### 00-05.4 — Modes: bootstrap, refresh, and lost-state
 
-A downstream `<PROJECT>-100` is either being established for the first
-time, or it already has a local index that needs to be kept current.
-The conform engine detects which case applies and runs in one of two
-modes.
+An adopting `<PROJECT>-100` is either being established for the first
+time, already has state from a prior sync, or has lost that state. The
+tool detects which case applies from the presence of `.arc100/state.yml`
+and runs in one of three modes — there is no flag to pass.
 
-**Bootstrap mode** runs when `local_index_path` does not yet exist.
-The engine copies the upstream YAML verbatim, swaps the marker pair
-from `ARC-100-INDEX` to `<PROJECT>-100-INDEX`, records the upstream
-version, and exits 0. Every inherited entry retains `arc_100: true`
-and its original `arc_100_ulid`. No decisions queue — bootstrap is
-by definition an empty downstream, so there is no project context to
-preserve.
+**Bootstrap** runs when `.arc100/state.yml` is absent and the project's
+working index is not yet seeded. The tool delivers the payload, seeds the
+working index from the upstream entries (each retaining `arc_100: true`
+and its original `arc_100_ulid`), records the index `BASE` snapshot in
+`.arc100/state.yml`, and exits 0. No decisions escalate — a fresh project
+has no prior context to reconcile against. Bootstrap is defensive: any
+pre-existing file at a payload target path is backed up to
+`.arc100/backups/<stamp>/` before being written.
 
-**Update mode** runs when `local_index_path` already exists. The
-engine builds two ULID-keyed dictionaries (upstream and local),
-classifies every upstream entry against the local state, applies the
-auto-applicable diffs subject to the bounds in §00-05.5, queues the
-rest, and exits with a code that signals the outcome.
+**Refresh** runs when `.arc100/state.yml` is present. The tool reads the
+recorded `BASE`, syncs the payload by file class, and runs the 3-way ULID
+reconcile (BASE / NEW / LOCAL) over the index — auto-applying the diffs
+within the §00-05.5 bounds, escalating the rest, and exiting with a code
+that signals the outcome.
 
-Mode detection is implicit. There is no `--bootstrap` flag; the
-presence or absence of the local index file is itself the signal.
-This avoids the operator-error class where a downstream forgets the
-flag and accidentally clobbers a project they thought was new.
+**Lost-state degradation** runs when `.arc100/state.yml` is absent but the
+working index is already seeded with inherited entries. With no `BASE` to
+reconcile against, the tool fails safe: every inherited difference between
+NEW and LOCAL escalates rather than auto-applying, and every mirror file
+reads as locally edited — so each is backed up before being overwritten.
+This is the recovery path for a project that deleted or never committed
+`.arc100/`; it never silently rewrites an entry it cannot prove is safe.
 
-### 00-05.5 — Classifications
+Mode detection is implicit. There is no `--bootstrap` flag; the presence
+or absence of `.arc100/state.yml` (and, when absent, whether the working
+index is already seeded) is itself the signal. This avoids the
+operator-error class where a project forgets the flag and accidentally
+clobbers an index it thought was new.
 
-The conform engine produces one of the following classifications per
-upstream entry. The first six are the routine static diffs; the last
-three are conservatively-flagged adversarial or extreme cases.
+### 00-05.5 — Classifications and field classes
 
-| Classification | Auto-applies? | Queued kind |
+The 3-way reconcile sorts every index entry into one of two outcomes: an
+**auto-applied action** (a deterministic diff within the bounds below) or
+an **escalation** (a deferred item written to the decision file for a
+human to answer). Auto-applied actions are `update`, `insert_chapter`,
+`insert_book`, `delete`, and `noop` (LOCAL already equals NEW — refresh
+the `BASE` only, never counted toward the bulk guard).
+
+**Field classes — what "the same entry" even means.** Not every field
+syncs the same way. Book 00 is an immutable mirror downstream, so its
+entries sync *fully*; every other book is the project's own, so only the
+slot identity syncs:
+
+| Field class | Entries it covers | Synced fields |
 | --- | --- | --- |
-| `identical` | yes (no-op) | — |
-| `metadata_only` | yes | INFO row in pending_decisions.md |
-| `renumber_no_collision` | yes (rewrites local id) | INFO row |
-| `new_no_collision` | yes (adds placeholder) | — |
-| `slot_collision` | no | `slot_collision` |
-| `upstream_deprecation` | no | `upstream_deprecation` |
-| `upstream_removal` | no | `upstream_removal` |
-| `malformed_upstream` | no | `malformed_upstream` |
-| `upstream_sha_drift` | no (meta) | `upstream_sha_drift` |
-| `bulk_change` | no (meta) | `bulk_change` |
+| `SYNCED_FIELDS_FULL` | Book 00 (mirror) | `title`, `description`, `keywords`, `status`, `id`, `band` |
+| `SYNCED_FIELDS_SLOT` | every other book | `arc_100_ulid`, `id`, `band` |
+
+For a non-Book-00 inherited entry only the slot identity (its place in
+the numbering) is reconciled; the project owns the title, description,
+and status of its own chapters (00-00 §00-00.7.1).
+
+**Escalation kinds.** When a diff fails the auto-apply test it escalates
+under one of eight kinds:
+
+| Kind | What it flags |
+| --- | --- |
+| `slot_collision` | An upstream entry would land on a slot the project already occupies with a different ULID. |
+| `local_edit_conflict` | The project hand-edited a synced field of an inherited entry, and upstream now changes it too. |
+| `modified_then_upstream_changed` | An inherited entry diverged from `BASE` locally, and upstream has since moved as well. |
+| `lineage_anomaly` | A `BASE`/NEW/LOCAL relationship that should be impossible (e.g. a `BASE` entry upstream no longer accounts for). |
+| `local_deletion_conflict` | The project deleted an inherited entry that upstream still ships. |
+| `new_no_parent` | An incoming chapter whose parent book is not present to hang it under. |
+| `malformed_upstream` | An upstream field that fails the content guard (control bytes, HTML, over-length — §00-05.6). |
+| `bulk_change` | The run's change count crosses the bulk guard (below) — the whole batch defers. |
+
+There is no ninth kind for a malformed *proposal*: if the `proposed`
+cell of any other escalation fails the content guard, that block is
+**re-labelled** `malformed_upstream` rather than rendered raw — a
+re-label, not a new classification.
 
 Two bounds shape the auto-apply pool:
 
-1. **Project-owned entries are off-limits.** Any local entry whose
-   `arc_100: false` is invisible to `metadata_only`. If an upstream
-   ULID matches a downstream-owned entry, the diff queues under
-   `slot_collision` for explicit reconciliation rather than silently
-   overwriting project intent.
-2. **Bulk-change cap.** If a single conform run would auto-apply more
-   than 20 mutations, the engine refuses to apply any of them and
-   queues the lot under a single `bulk_change` decision. This bounds
-   the "upstream rewrote the world" attack shape; a routine sync
-   typically produces 0–5 auto-applies.
+1. **Project-owned entries are off-limits.** Any local entry with
+   `arc_100: false` is the project's own; the reconcile never rewrites
+   it. An upstream ULID that lands on a project-owned slot escalates
+   under `slot_collision` rather than silently overwriting project
+   intent.
+2. **Bulk-change guard.** The cap is a two-part formula, not a flat
+   number: a run escalates the whole batch under `bulk_change` when
+   `changed > 10`, **or** when `changed >= 3` **and**
+   `changed > 0.20 × inherited` (`inherited` = the count of
+   `arc_100: true` local entries). This bounds the "upstream rewrote the
+   world" shape — a large absolute change, or a small index where even a
+   few changes are a large *fraction* — while letting a routine sync of
+   0–5 changes pass. When the guard trips, *no* change from that run is
+   applied; the batch waits in the decision file.
 
 The `topical_overlap` classification (semantic similarity between an
 upstream entry and a project-owned local entry) was specified in an
-earlier plan revision and intentionally deferred. The two real
-downstream projects to date (FLOW-100, CS-100) are unlikely to
-produce enough topical drift to justify a Jaccard tokenization spec,
-and a tokenization rule that loads-bears the trust boundary is
-strictly worse than a missing classification. It will return when
-evidence demands.
+earlier plan revision and intentionally deferred. The downstream projects
+to date are unlikely to produce enough topical drift to justify a Jaccard
+tokenization spec, and a tokenization rule that load-bears the trust
+boundary is strictly worse than a missing classification. It will return
+when evidence demands.
 
 ### 00-05.6 — The judgment surface { #c4-judgment-surface }
 
-When the conform engine queues a decision, three artifacts collaborate
-to surface it to the human:
+When the reconcile escalates, three artifacts collaborate to surface the
+decision to the human:
 
-1. `ARC-100-SYNC/state/pending_decisions.md` is the queue — a markdown
-   table keyed by deterministic `decision_id` (kind + 8-hex SHA256 of
-   the upstream + local ULID pair), with one `## Decision details`
-   block per row.
-2. The mkdocs build hook detects the presence of that file and
-   prepends a **critical-decisions banner** to the rendered home page.
-   The team's docs site is therefore the surface where pending
-   decisions become visible — there is no separate dashboard to check.
-3. The `arc-100-librarian` agent's **Resolution skill** is the
-   resolver. The slash command `/resolve-arc-100-issues` dispatches
-   the librarian against the queue; for each row, the librarian
-   proposes a resolution, awaits explicit `y/n` confirmation, applies
-   on `y`, and removes the row. The skill is judgment-bound and never
-   writes without user confirmation.
+1. `.arc100/PENDING-INDEX-DECISIONS.yml` is the queue — a YAML file (not
+   a markdown table) with one block per deferred item, keyed by a
+   deterministic `decision_id` (the escalation kind + an 8-hex SHA256 of
+   the upstream + local ULID pair). Each block carries the kind, the
+   `current` and `proposed` cells, the `action` an `accept` will perform
+   on the next run, and an empty `decision:` field for the human to fill
+   with `accept` or `reject`.
+2. The mkdocs build hook detects that file **by presence** and prepends a
+   **critical-decisions banner** to the rendered home page. The project's
+   docs site is therefore the surface where pending decisions become
+   visible — there is no separate dashboard to check.
+3. The `arc-100-librarian` agent's **Resolution skill** is the resolver.
+   The slash command `/resolve-arc-100-issues` dispatches the librarian
+   against the queue; for each block it proposes a resolution and, on
+   confirmation, fills in that block's `decision:` (`accept` | `reject`;
+   a defer leaves it `null`). The skill fills in the answer only — it
+   **applies nothing**. The *next* `arc_sync.py` run reads the answered
+   file, applies the accepted actions, and archives the file under
+   `.arc100/decisions-archive/`.
 
-All three artifacts are essential. The banner makes the queue
-unmissable. The deterministic `decision_id` makes resolution
-idempotent across re-runs of the engine. The Resolution skill keeps
-the resolution flow in the same agent that owns slot allocation, so
-the user does not context-switch between two agents that share most
-of their working knowledge.
+All three artifacts are essential. The banner makes the queue unmissable.
+The deterministic `decision_id` makes resolution idempotent across
+re-runs of the tool. The Resolution skill keeps the answer step in the
+same agent that owns slot allocation, so the user does not context-switch
+between two agents that share most of their working knowledge.
 
-Upstream-sourced text (titles, descriptions, keywords) is rendered
-into `pending_decisions.md` and is therefore untrusted-content
-territory. The engine escapes every such field — replacing `|` with
-`\|`, refusing rows whose fields contain control bytes or HTML tags
-or exceed 200 characters (those queue under `malformed_upstream`
-instead). The Resolution skill must not propose any edit that
+Upstream-sourced text (titles, descriptions, keywords) is rendered into
+the decision file and is therefore untrusted-content territory. The tool
+escapes every such field — replacing `|` with `\|`, refusing fields that
+contain control bytes or HTML tags or exceed `FIELD_MAX_CHARS` (2000; a
+garbage bound, not a style limit — production descriptions are
+paragraph-length and the display layer truncates separately). A field
+that fails the guard re-labels its block to `malformed_upstream` rather
+than rendering raw. The Resolution skill must not propose any edit that
 preserves HTML or shell-metacharacter content without explicit user
-re-confirm. Together, these rules prevent the queue itself from
-becoming an attack surface.
+re-confirm. Together, these rules prevent the queue itself from becoming
+an attack surface.
 
 **Implementation note (banner rendering).** The banner template
 `<div>` carries the `markdown="1"` attribute so its inner `## Critical
@@ -318,43 +390,54 @@ first thing to check.
 
 ### 00-05.7 — Runtime composition { #c4-runtime-composition }
 
-ARC-100-SYNC is implemented in **Python 3** for the synchronization engine,
-the ULID generator, the build hook, and any future tooling that operates on
-the index. The single exception is the **bash** install script, which is the
-bootstrap entry point — bash is the only runtime that can be assumed present
-before the others have been installed.
+ARC-100-SYNC is implemented in **Python 3** — the sync-and-rectify tool,
+the ULID generator, and the build hook. The tool is **self-contained: the
+Python 3 standard library plus PyYAML, and nothing else**. There is no
+network code in it (the old `urllib` fetcher is gone): obtaining the
+payload is the caller's job, not the tool's. The one non-Python
+dependency is **git**, used once — to clone the public mirror — and it is
+never invoked *by* the tool; the bootstrap entry point is a plain
+`git clone --depth 1 …` followed by
+`python3 <clone>/tools/arc_sync.py --target .`. The bash installer of the
+previous model is retired.
 
 **Why Python.** The mkdocs site that hosts ARC-100's chapters is itself a
-Python tool. Any machine that renders an ARC-100 (or downstream `<PROJECT>-100`)
-documentation site already has Python 3 and PyYAML on it. Using the same
-runtime for the synchronization tooling reuses that install footprint,
-reduces complexity for downstream adopters, and gives the conform engine
-free access to YAML parsing (PyYAML), HTTP fetching (`urllib`), and
-cryptographic randomness (`secrets`) without any new package install. A
-previous revision shipped the ULID generator in JavaScript (Node), but the
-choice had no architectural rationale beyond historical accretion; intent-
-capture review consolidated it back to Python so that ARC-100-SYNC has
-exactly two intentional runtimes (bash bootstrap, Python everything else),
-each with a defensible reason for being there.
+Python tool. Any machine that renders an ARC-100 (or downstream
+`<PROJECT>-100`) documentation site already has Python 3 and PyYAML on it.
+Using the same runtime for the sync tooling reuses that install
+footprint, reduces complexity for adopters, and gives the tool free
+access to YAML parsing (PyYAML) and cryptographic randomness (`secrets`,
+in the ULID generator) without any new package install. A previous
+revision shipped the ULID generator in JavaScript (Node), but the choice
+had no architectural rationale beyond historical accretion; intent-capture
+review consolidated it back to Python so the runtime story is one language
+plus git, each with a defensible reason for being there.
 
 **Integrity test for adding a third runtime.** Any future ARC-100-SYNC
-component proposed in a language other than Python or bash must be able to
-answer: *what does this language give us that Python cannot, that is worth
+component proposed in a language other than Python must be able to answer:
+*what does this language give us that Python cannot, that is worth
 imposing on every downstream installation?* If the answer is "convenience
 for the author," the answer is no.
 
-**Why the components live under `ARC-100-SYNC/`, outside any `docs_dir`.**
-The conformance system is *infrastructure*, not documentation. Its
-scripts, templates, hooks, and state are deliberately kept out of the
-rendered `docs/` (and `master-vault/docs/`) tree so that mkdocs never
-renders them as pages: a downstream `<PROJECT>-100` that adopts the
-toolkit does not want the engine and its templates appearing in its
-published documentation site. The single folder boundary also makes the
-"upstream-owned, overwritten on reinstall" contract unambiguous —
-everything under `ARC-100-SYNC/` is refreshed by `install.sh`, and
-nothing a project authors lives there (the project's own files live
-outside it; see [00-07 Getting Started](00-07_ARC-100_Getting_Started.md)
-§00-07.4 for the refresh discipline).
+**You are running upstream code.** `tools/arc_sync.py` is payload-
+delivered and then executed on the adopter's machine. There is no way
+around that: a sync tool that writes the adopter's files has to run
+somewhere. The residual trust surface is therefore "you are running
+upstream code," stated plainly here and bounded by the integrity story in
+§00-05.11 (the public mirror + immutable `vN` tags + an out-of-band
+digest). Adopters who want to read before they run can: the tool is a
+single auditable Python file in the clone.
+
+**Where the components live.** The tool, the agent and command templates,
+and the seeded config are *infrastructure*, not documentation — they are
+not rendered as pages. The synced **content** (Book 00 bodies, the
+upstream index) lands under the project's `docs/00/`; the **tool** runs
+from the throwaway clone (`<clone>/tools/`) and is not copied into the
+project tree at all; per-project **state** lives under `.arc100/` at the
+project root, outside any `docs_dir`; the mirror hook lands at `_hooks/`.
+Nothing a project authors is overwritten by a sync (see
+[00-07 Getting Started](00-07_ARC-100_Getting_Started.md) §00-07.4 for the
+refresh discipline).
 
 **Container view (C4-2):**
 
@@ -364,136 +447,124 @@ ContainerView
 
 ### 00-05.8 — Distribution { #c4-distribution }
 
-ARC-100-SYNC's distribution shape is the answer to one constraint:
-**downstream projects must be able to install with curl alone — no
-git, no gh CLI, no pip, no npm**. The shape is therefore a curl-to-
-bash one-liner that pulls a small bash script which then fetches a
-fixed list of files from `raw.githubusercontent.com`.
+ARC-100-SYNC is distributed as a **public git mirror** that the adopter
+**clones and runs**. The mirror is `titanium4638/ARC-100-dist`; a sync is
+a depth-1 clone of it followed by one command:
 
 ```bash
-# Recommended for production — pin to an immutable per-version tag.
-UPSTREAM_TAG=ARC-100.1 bash <(curl -sSL \
-  https://raw.githubusercontent.com/titanium4638/ARC-100/ARC-100.1/ARC-100-SYNC/scripts/install.sh)
-
-# Moving-tag form — always fetches latest stable. Convenience for
-# development; each run is TOFU. Use immutable form in production.
-bash <(curl -sSL \
-  https://raw.githubusercontent.com/titanium4638/ARC-100/ARC-100-CURRENT/ARC-100-SYNC/scripts/install.sh)
+git clone --depth 1 https://github.com/titanium4638/ARC-100-dist.git "${TMPDIR:-/tmp}/ARC-100-dist"
+python3 "${TMPDIR:-/tmp}/ARC-100-dist/tools/arc_sync.py" --target .
 ```
 
-The installer's asset list is embedded directly in the script as a
-bash array — not fetched from a separate `manifest.txt`. This choice
-is deliberate: the manifest had exactly one consumer (the installer
-itself), introduced a network round-trip, and added a class of attack
-("manifest body silently replaced by an HTML 404") that a content
-filter then had to defend against. Embedding the list eliminates all
-three concerns; the list is updated in the same diff as the script.
+The clone is throwaway — it is the delivery vehicle, not part of the
+project tree. `--target` is the project root; `--source` is unnecessary
+(it defaults to the clone root).
 
-The installer prints next-steps prose rather than auto-performing the
-post-install copies (placing the librarian template in `.claude/
-agents/`, the slash commands in `.claude/commands/`, the config at
-the project root). Three reasons:
+**What the mirror's refs mean.** Two axes, deliberately separate
+(§00-05.9):
 
-- Downstream `.claude/` layouts vary; an auto-copy script would have
-  to encode every variation.
-- Choosing a config preset is a deliberate one-time decision that
-  belongs to a human moment, not a curl one-liner.
-- An auto-copy install grows the script's security surface (it now
-  writes outside `ARC-100-SYNC/`); the manifest-only shape is
-  reviewable in one screen.
+- **HEAD of `main` is the current release.** Every content change —
+  chapter bodies, the tool, templates, descriptions — republishes by
+  pushing `main`. There is no moving "current" tag, no CDN-served raw-file
+  path, and no first-run trust step on a drifting SHA.
+- **`vN` tags are immutable** (`v1`, `v2`, …) and version the **index**:
+  a tag is cut only when the ARC-100 index gains or loses an entry, and
+  it never moves once published. An adopter who needs reproducibility
+  checks out a `vN` tag instead of `main`.
 
-Phase 4 of the v1 implementation extends the manifest below as follows.
+**The payload tree.** The mirror's content is the payload `arc_sync.py`
+expects:
 
-#### 00-05.8.1 — Toolchain manifest tomorrow (phase 4)
+- `mirror/` — always-synced files; the path under `mirror/` **is** the
+  downstream target path (relpath-preserving, no remapping). This carries
+  the Book 00 chapter bodies (`mirror/docs/00/00-*.md`), the upstream
+  index (`mirror/docs/00/00-01_ARC-100_Standard_Inventory.md`), the
+  master-index hook (`mirror/_hooks/`), and the home-page assets + fonts.
+- `seed/` — copy-if-absent files, stored under their **final target
+  names**: the config example, the site-config template, the
+  Architectural-Model page placeholder.
+- `tools/arc_sync.py` — the tool itself, run from the clone.
+- `payload.yml` — `release_tag` (the index axis) and `source_sha` (the
+  content axis), supplied at publish time.
 
-Phase 4 of the v1 implementation extends ARC-100-SYNC to distribute
-the *full* toolchain a downstream `<PROJECT>-100` project needs to
-render its docs site AND author its own LikeC4 model. The manifest
-adds three pillars to the existing curl-bootstrap shape:
+There is no embedded file list and no installer to run: file classes
+(§00-05.5 / §00-05.8.1) decide what is overwritten and what is left
+alone, and the tool reads the tree directly. The adopter is **running
+upstream code** when it executes `arc_sync.py` (§00-05.7 / §00-05.11);
+[00-07 Getting Started](00-07_ARC-100_Getting_Started.md) §00-07.2 walks
+the clone-and-run flow step by step.
 
-1. **Python dependency pin-set (`requirements.txt`)** — phase 3a's
-   hash-pinned `requirements.txt` at the repo root (mkdocs,
-   mkdocs-material, pymdown-extensions, pyyaml, mkdocs-likec4,
-   pyjson5) is added to the FILES array so downstream projects
-   inherit the same dep pinning. Installation remains a separate
-   user step (`python3 -m pip install --user --require-hashes -r
-   requirements.txt`); whether `install.sh` invokes it
-   automatically is a phase-4 plan decision (per V1_STRATEGY §6.3 Q6).
+#### 00-05.8.1 — Toolchain delivery and the doctor
 
-2. **LikeC4 toolchain templates** — a new
-   `ARC-100-SYNC/templates/architecture-modeling/` (naming TBD at
-   phase 4 /build-plan; see V1_STRATEGY §6.3 Q1) carrying
-   `architecture/LikeC4/package.json` (pinned to upstream's
-   `likec4@~1.57.0` minor), `package-lock.json` (for reproducible
-   `npm ci` per TM-3a-1), the wrapper script, a starter
-   `template.c4`, the project config, an explainer
-   `docs/architecture/index.md`, and the typography CSS. Phase 4's
-   `install.sh` extension runs `npm ci` inside
-   `architecture/LikeC4/` after fetching the templates, gated
-   behind the Node-present check (next pillar).
+A working `<PROJECT>-100` needs more than chapter content: it needs the
+mkdocs build dependencies and, if the project authors a LikeC4 model, the
+Node-based LikeC4 toolchain. ARC-100-SYNC delivers what it can by file
+class and *surfaces the rest with the doctor* — it never installs a
+toolchain itself.
 
-3. **Platform-aware Node bootstrap (`ARC-100-SYNC/platforms/macos/`)**
-   — a `node-check.sh` that detects Node ≥ 22.22.3 (LikeC4's
-   `engines.node` requirement) and a `node-install.sh` that
-   installs Node 24.x via Homebrew or `nvm` (whichever the user's
-   machine already has) with interactive confirmation — never
-   silent. `install.sh` detects the platform via `uname -s` and,
-   on `Darwin`, runs the macOS-specific routine; on other
-   platforms exits cleanly with a "platform support for `<X>` is
-   planned but not yet implemented" message. The
-   `ARC-100-SYNC/platforms/` directory layout makes future
-   platforms (linux, windows-wsl) additive.
+- **Python build dependencies** ride along as the hash-pinned
+  `requirements.txt` (mkdocs, mkdocs-material, pymdown-extensions, pyyaml,
+  mkdocs-likec4, pyjson5), delivered seed-class. Installing them stays a
+  deliberate user step; the tool never runs `pip`.
+- **The LikeC4 toolchain** (the pinned `package.json` / `package-lock.json`,
+  the wrapper, a starter model, the typography CSS) is delivered as part
+  of the payload. Running `npm ci` to populate `node_modules` is the
+  user's step.
+- **Node itself** is never installed by the tool. The previous model's
+  platform-aware Node bootstrap is retired along with the installer.
 
-The discipline the manifest enforces: **a downstream `<PROJECT>-100`
-on a fresh macOS machine reaches a fully-working state — index in
-sync, mkdocs site renderable, LikeC4 toolchain installed,
-`architecture/LikeC4/` ready for the downstream's own model — with
-one `curl-to-bash` install plus one `pip install`**. That is the
-v1 endpoint. v1 explicitly does NOT distribute Linux / Windows /
-WSL bootstrap routines (the `platforms/` directory layout reserves
-the slots; only `platforms/macos/` ships).
+The **doctor** is the safe residue of that retired installer. After a
+sync, `arc_sync.py` runs presence-only probes and prints a prepared
+command for anything missing — it never invokes them and never alters the
+run's exit code:
 
-#### 00-05.8.2 — Configuration standard distribution (phase 4b)
+| Probe | When absent, the doctor prints |
+| --- | --- |
+| `mkdocs` (docs build deps) | `python3 -m pip install --user --require-hashes -r requirements.txt` |
+| `node` (LikeC4 authoring, optional) | install Node (≥ the LikeC4 toolchain's `engines.node`) via your platform's package manager |
+| `likec4` (`architecture/LikeC4/node_modules`) | `( cd architecture/LikeC4 && npm ci --no-fund --no-audit )` |
 
-Phase 4b extends the manifest a second time to distribute the
-ARC-100 *documentation-system configuration* — not just its chapter
-content. The bridge from "what a downstream renders" to "how a
-downstream renders it": the genericised two-mode master-index hook
-template (`templates/hooks/arc100_master_index.py` — reads
-`project_name` from the downstream's `ARC-100-SYNC.config.yml` via
-`yaml.safe_load`, defaults to `"ARC-100"` when the config is absent
-so the upstream's own dual-site build stays byte-identical), the
-`mkdocs.yml.template` (sourced from the green project-site config
-`mkdocs.arc100project.yml` with only `site_name` and
-`site_description` substituted), the four home-page assets
-(`arc100.css`, `arc100.js`, `theme-green.css`, `theme-red.css`) and
-the Inter font assets (`inter.css` + three woff2 files) at
-`templates/assets/arc100/{,fonts/}`, and the standalone
-Architectural-Model page template at
-`templates/docs/architectural-model.md.template`.
+The discipline the model enforces: a `<PROJECT>-100` reaches a fully
+working state — index in sync, mkdocs site renderable, the LikeC4
+toolchain ready — by cloning the mirror, running `arc_sync.py`, and then
+running exactly the commands the doctor printed. There is no
+platform-specific install path baked into the tool: a missing tool is a
+printed suggestion, never a gate.
+
+#### 00-05.8.2 — Configuration distribution
+
+The payload distributes the ARC-100 *documentation-system configuration*
+alongside its chapter content — the bridge from "what a project renders"
+to "how it renders it". The genericised master-index hook
+(`mirror/_hooks/arc100_master_index.py`) ships **mirror-class**; it reads
+`project_name` from the project's `ARC-100-SYNC.config.yml` via
+`yaml.safe_load` and defaults to `"ARC-100"` when the config is absent, so
+the ARC-100 repo's own build is unaffected. The home-page assets
+(`arc100.css`, `arc100.js`, `theme-green.css`, `theme-red.css`) and the
+Inter fonts (`inter.css` + woff2) also ship mirror-class. The
+`mkdocs.yml.template` and the standalone Architectural-Model page template
+ship **seed-class** (copy-if-absent) — a project edits its own copy.
 
 ARC-100 itself is one initiative rendered as two distinct projects:
-**ARC-100** (the standard — `mkdocs.arc100.yml`, master-vault,
-inventory mode, title "ARC-100 Master Index") and **ARC-100
-Project** (the in-repo instance that exercises the standard
-against ARC-100's own development — `mkdocs.arc100project.yml`,
-project tree, index mode, title "ARC-100 Project Index"). The word
-"Project" is
-the user-facing differentiator between the two; it appears exactly
-once, in the ARC-100 Project's rendered title + H1 + sidebar label,
-and never in the ARC-100 standard's rendered output. A downstream
-`<PROJECT>-100` runs only ONE mkdocs site (index mode), renders ONE
-project, and renders its home as `"<PROJECT>-100 Index"` — no
-"Project" word, because there is nothing to differentiate it from.
+**ARC-100** (the standard — `mkdocs.arc100.yml`, master-vault, inventory
+mode, title "ARC-100 Master Index") and **ARC-100 Project** (the in-repo
+instance that exercises the standard against ARC-100's own development —
+`mkdocs.arc100project.yml`, project tree, index mode, title "ARC-100
+Project Index"). The word "Project" is the user-facing differentiator
+between the two; it appears exactly once, in the ARC-100 Project's
+rendered title + H1 + sidebar label, and never in the ARC-100 standard's
+rendered output. A downstream `<PROJECT>-100` runs only ONE mkdocs site
+(index mode), renders ONE project, and renders its home as
+`"<PROJECT>-100 Index"` — no "Project" word, because there is nothing to
+differentiate it from.
 
-The hook distinguishes ARC-100 standard from ARC-100 Project by
-inspecting the SCHEME name read from `ARC-100-SYNC.config.yml`'s
-`project_name` field. The scheme name is what `conform.py` uses to
-compose the on-disk markers (`f"{scheme_name}-INDEX-START"`); when
-the scheme name ends in `-PROJECT`, the build is ARC-100 Project.
-The hook strips that suffix to derive the user-facing display name
-and uses the suffix as the `is_arc100_project` flag that composes
-the " Project" differentiator at render time:
+The hook distinguishes the two by inspecting the SCHEME name read from
+`ARC-100-SYNC.config.yml`'s `project_name` field — the same value
+`arc_sync.py` uses to compose the on-disk markers
+(`f"{scheme_name}-INDEX-START"`). When the scheme name ends in
+`-PROJECT`, the build is ARC-100 Project; the hook strips that suffix to
+derive the display name and uses its presence as the `is_arc100_project`
+flag:
 
 | Case | scheme name | display name | is_arc100_project | marker base |
 | --- | --- | --- | --- | --- |
@@ -501,375 +572,261 @@ the " Project" differentiator at render time:
 | ARC-100 Project (green site) | `ARC-100-PROJECT` | `ARC-100 Project Index` | True | `ARC-100-PROJECT-INDEX` |
 | `<PROJECT>-100` downstream | `<PROJECT>-100` | `<PROJECT>-100 Index` | False | `<PROJECT>-100-INDEX` |
 
-Chapter files for a downstream live under per-book subfolders
-(`docs/00/` for inherited Book 00 chapters, plus `docs/01/` and
-other project-authored books). The hook reads `local_index_path`
-from the downstream's config (resolved relative to the repo root —
-matching `conform.py` L113's CWD-relative convention) to discover
-the index source file; ARC-100 Project's own `ARC-100-SYNC.config.yml`
-sets it explicitly to `docs/01/01-01_ARC-100-Project_Index.md`;
-the hook falls back to its `docs_dir`-relative default constant
-when the config is absent.
+A downstream's chapters live under per-book subfolders (`docs/00/` for the
+inherited Book 00, plus `docs/01/` and the other project-authored books).
+The hook discovers the index source from the project's **working index** —
+chapter 01-01 at `docs/01/01-01_<PROJECT>-100_Index.md`, convention-derived
+from `project_name` unless `local_index_path` overrides it — and resolves
+every write target through the same `--target` path-containment convention
+`arc_sync.py` uses (§00-05.11), not a CWD-relative one.
 
-Configuration ≠ content. The configuration-standard distribution
-covers how the project's documentation site renders the index;
-the chapter content distribution (D7 in §00-05.8.1, per V1_STRATEGY
-§7A item 6) covers what chapters the downstream inherits. The two
-are independent surfaces synchronised by the same `install.sh` (the
-post-install steps in [00-07 Getting Started](00-07_ARC-100_Getting_Started.md)
-§00-07.3 — and the installer's own Next-steps echo — walk the
-configuration-standard copies; the Book 00 `cp -n` block is the
-chapter-content copy). FILES array grows from 28 (phase 4a) to 39
-(phase 4b), well past the 25-entry threshold that the TM-2b-5
-deferred-SHA256 review uses as a revisit trigger — phase 4b's
-Revision 6 row below restates the deferral with the new count.
-
-The `GATE: security-critical` re-engages at phase 4's plan time for
-the Node-install routine review (`threat-modeler` confirms the
-Homebrew/nvm prompt-before-install discipline, the platform
-detection failure modes, and the FILES-array additions remain
-within the existing TM-2b-1 / TM-2b-2 / TM-3a-1/2/3/4 envelope).
-
-#### 00-05.8.3 — Two distribution modes: public and private (phase 7)
-
-Distribution has two access modes, selected by the **presence of a
-token in the environment** — not by a flag, and not by a second
-installer:
-
-| Mode | Trigger | Fetch host | Transport |
-| --- | --- | --- | --- |
-| **Public** | no `GH_TOKEN`/`GITHUB_TOKEN` | `raw.githubusercontent.com` | the pre-phase-7 curl, byte-for-byte |
-| **Private (authenticated)** | a token in the env | `api.github.com` Contents API | Bearer token, raw media type |
-
-The same `install.sh` and the same `conform.py` carry both. When a
-token is present, every fetch is re-pointed to the GitHub **Contents
-API** (`api.github.com/repos/<repo>/contents/<path>?ref=<tag>`) with an
-`Authorization: Bearer <token>` header; when it is absent, the exact
-public `raw.githubusercontent.com` path runs unchanged. This is what lets
-the canonical upstream stay **private** while granted collaborators (and
-the project's own dogfood) install and sync against it. `install.sh`
-requests the `application/vnd.github.raw` media type so the file bytes
-land straight on disk; `conform.py` requests `application/vnd.github+json`
-and base64-decodes the `.content` field, which keeps the response
-content-type `application/json` (already on the conform allowlist — no
-widening). `api.github.com` was already an allowed host for the
-moving-tag refs lookup, so no new egress host is introduced.
-
-The token is sourced from the environment **only** (`GH_TOKEN`, else
-`GITHUB_TOKEN`). It is never accepted as a command-line argument, never
-written to disk, and never echoed: `install.sh` passes it to `curl`
-through a `-K` config read on **stdin** (so it is absent from `ps`
-argv and leaves no temp file), and `conform.py` places it only in a
-request header (never in a URL or a log line). The two modes are
-**host-disjoint** — the public path may reach only
-`raw.githubusercontent.com`, the authenticated path only
-`api.github.com` — and the authenticated fetch follows **no redirect**
-that would carry the `Authorization` header to another host. §00-05.11
-records the full token-hygiene posture. The adopter-facing install
-commands for both modes are in [00-07 §00-07.2](00-07_ARC-100_Getting_Started.md).
+Configuration ≠ content. The configuration distribution covers how the
+site renders the index; the content distribution (the Book 00 bodies under
+`docs/00/`) covers what chapters the project inherits. The two are
+independent surfaces delivered by the same sync run, separated only by
+file class.
 
 ### 00-05.9 — Versioning
 
-ARC-100 ships two kinds of tags:
+ARC-100 versions on **two independent axes**, and keeping them separate is
+what makes routine content updates cheap while index changes stay
+deliberate.
 
-- **`ARC-100-CURRENT`** is a moving tag that always points to the
-  latest stable revision. It is force-pushed (`git tag -f ARC-100-
-  CURRENT && git push -f`) when a new revision is cut. The default
-  fetch target for both `install.sh` and the conform engine.
-- **`ARC-100.1`, `ARC-100.2`, …** are immutable per-version tags.
-  Downstream config sets `pinned_version: ARC-100.N` to opt out of
-  the moving tag and pin to a fixed upstream revision.
+- **The ARC-100 index version** is `arc_100_version: "100.N"` in the
+  inventory, published as the immutable tag **`vN`** on the mirror. It
+  bumps **only** when the index gains or loses an entry. The tag marks
+  where index version N first published and **never moves**. An adopter
+  who needs reproducibility checks out `vN`.
+- **The content version** is every mirror `main` commit. Chapter bodies,
+  tooling, templates, and descriptions republish by pushing `main` — **no
+  tag, no bump**. HEAD of `main` is the current content, always at the
+  latest index version.
 
-The moving tag is the convenience option; the immutable tag is the
-trust option. Downstream projects that need reproducibility — or
-that operate in regulated environments where unattended supply-chain
-drift is a compliance issue — should pin.
+`payload.yml` carries both: `release_tag` is the index axis (`vN`),
+`source_sha` is the content axis (the published commit).
 
-The conform engine records the resolved commit SHA of every fetch in
-`ARC-100-SYNC/state/last_sync.json`. On every subsequent run, the
-engine reads the prior SHA and compares it against the new one. If
-they differ — or if the prior is known-good and the current is
-`"unknown"` because `api.github.com` failed — the engine queues an
-`upstream_sha_drift` decision and forces exit 1 even when no other
-classifications would queue. This converts SHA recording from a
-passive audit log into an active trust-on-first-use signal.
+Why the asymmetry. An index change can ripple into every downstream
+`<PROJECT>-100` index — it must be folded in by the 3-way reconcile and
+may escalate (§00-05.3–§00-05.5), so it is worth a version number a
+downstream can pin to. A content change is a hash-synced mirror file:
+trivial downstream, applied by the next sync with no reconcile. There is
+no moving "current" tag, no force-push, and no SHA-drift
+trust-on-first-use — `main` *is* the moving pointer, and git object
+hashing on the clone is the integrity check (§00-05.11).
 
 #### 00-05.9.1 — Release procedure
 
-Publishing a revision means creating (or moving) the two tags above so
-the documented install commands and the conform-engine fetch resolve —
-both read the same tag URL, so a single publish fixes both. The step is
-mechanised by `ARC-100-SYNC/scripts/release.sh` (an ARC-100-self tool —
-NOT distributed) so the irreversible operations are *enforced by guards*,
-not merely remembered:
+There are two kinds of release, matching the two axes. Both are mechanised
+by `ARC-100-SYNC/scripts/release.sh` (an ARC-100-self tool — NOT
+distributed) so the public push is *enforced by guards*, not merely
+remembered.
 
-1. **Commit and push `main`.** Tags are cut from `origin/main`'s HEAD;
-   `release.sh` refuses unless the local HEAD equals `origin/main`,
-   compared against a **fresh** `git ls-remote` (never a stale
-   remote-tracking ref).
-2. **Run `release.sh --version=ARC-100.N`** (dry run) to preview, then
-   add `--execute`. The guards refuse a dirty tree, a HEAD that diverges
-   from `origin/main`, a `--version` whose minor does not match the
-   inventory `arc_100_version` (§00-05.2 / `00-01`), and any attempt to
-   re-point an immutable tag already on origin. `--execute` creates the
-   tags **locally** and records the two `git push` commands — each
-   annotated with the guard-validated SHA — to
-   `ARC-100-SYNC/state/release-push-commands.sh`. The tool never pushes.
-3. **Push the two tags by hand**, immutable first
-   (`git push origin ARC-100.N`) then the moving tag
-   (`git push -f origin ARC-100-CURRENT`). The public push stays a human
-   act, verifiable against the recorded SHA.
-4. **Run `ARC-100-SYNC/scripts/test_publish.sh --tag=ARC-100.N`** — the
-   end-to-end acceptance gate (also ARC-100-self, not distributed). It
-   runs the real one-liner into a throwaway external project and asserts
-   the install resolves (no 404), lands in the `<PROJECT>-100/` namespace
-   (never the project's generic `docs/`), leaves the project's
-   pre-existing files byte-for-byte intact, and carries the Book 00
-   chapters. This published-install test — not "the offline harness exits
-   0" — is the canonical acceptance for a release.
+- **Content release** (the common case) — push `main` only. Chapter
+  bodies, tool, templates, and descriptions update; no tag is cut and the
+  inventory `arc_100_version` does not change. `release.sh`'s index-shape
+  guard enforces the boundary: an entry add or remove *without* a version
+  bump errors out, so a content release cannot silently change the index.
+- **Index release** — bump the inventory `arc_100_version` to `100.N`,
+  then commit, tag `vN`, and push `main` plus the `vN` tag. Every earlier
+  `vN` tag stays frozen.
 
-**Version ↔ tag correspondence.** `arc_100_version: "100.N"` in the
-inventory corresponds to the immutable tag `ARC-100.N`. A content release
-bumps the inventory minor, cuts the next immutable tag (`ARC-100.N+1`)
-via `release.sh`, and force-moves `ARC-100-CURRENT` to the same commit;
-every earlier immutable tag stays frozen.
+The guards refuse a HEAD that diverges from `origin/main` (compared
+against a **fresh** `git ls-remote`, never a stale remote-tracking ref), a
+`vN` that does not match the inventory `arc_100_version` (§00-05.2 /
+`00-01`), and any attempt to re-point an immutable tag already on origin.
+On `--execute` the tool assembles the payload, validates it,
+smoke-bootstraps it, and pushes directly to the mirror; the dry-run
+default previews everything first.
 
-**Raw-CDN cache caveat.** `raw.githubusercontent.com` caches tag content
-for roughly five minutes. Immediately after force-moving
-`ARC-100-CURRENT`, a fetch may briefly serve the prior revision; the
-immutable `ARC-100.N` tag is never re-pointed and is therefore
-cache-stable. `test_publish.sh` keys its strict assertions off the
-immutable tag and treats the moving-tag run as advisory (bounded retry,
-then ADVISORY rather than FAIL).
+**Integrity is out-of-band.** Each release's notes carry a digest of the
+published payload. There is no hosted checksum endpoint and no per-fetch
+host-pin: the trust anchor is the public mirror plus `vN` immutability,
+and the digest in the release notes is the out-of-band cross-check an
+adopter can compare a clone against (§00-05.11).
 
 ### 00-05.10 — Scheduling
 
-The conform engine runs automatically through a lightweight **mkdocs
-hook** — `ARC-100-SYNC/templates/hooks/arc100_sync_check.py`, copied
-into a downstream project's `_hooks/` directory and registered under
-`mkdocs.yml`'s `hooks:` list. Two trigger paths:
+There is no scheduler. The hourly mkdocs sync-check hook of the previous
+model is retired (it was deleted in the v2 phases, and its detached engine
+subprocess / 3600s daemon thread / append-only sync log with it).
+Sync is **operator-invoked**: a human re-clones the mirror and runs
+`arc_sync.py --target .` (the `/sync-arc-100` command wraps both steps)
+whenever they want to pull upstream forward. No detached subprocess, no
+daemon, no install-time scheduler registration to forget about, and no
+platform-specific story for Linux vs macOS vs Windows vs WSL.
 
-1. On every `mkdocs build` and every `mkdocs serve` startup, the hook
-   spawns `conform.py` as a **detached, fire-and-forget subprocess**.
-   The hook never blocks the build; spawn failures (missing
-   `conform.py`, OSError, log-open failure) are swallowed silently.
-2. While `mkdocs serve` is running, a `daemon=True` thread re-fires
-   `conform.py` every **3600 seconds** (hard-coded — no
-   `sync_check_interval_seconds:` config field, by design, to keep
-   the surface predictable). The thread dies automatically when
-   `mkdocs serve` exits.
-
-Auto-apply follows phase_2a's bounded-auto-apply rules: a per-run
-cap of 20 changes, and any entry with `arc_100: false` is skipped.
-Subprocess stdout/stderr append to `ARC-100-SYNC/state/sync_check.log`;
-because `ARC-100-SYNC/state/` is gitignored (phase_2a F6), the log
-file never lands in commits.
-
-The hook reuses the mkdocs runtime that downstream projects (FLOW-100,
-CS-100) already keep running continuously during development, so
-there is no install-time scheduler registration to forget about and
-no platform-specific story for Linux vs macOS vs Windows vs WSL.
-Users who need a one-off sync between hourly ticks run
-`/conform-to-arc-100` manually. A prior revision of this chapter
-recommended a weekly cron; the hourly hook-driven cadence is more
-frequent, but the fire-and-forget shape means no-op runs are
-invisible to the developer and the bounded auto-apply cap protects
-against runaway change.
+Two passive surfaces keep the operator informed between runs: the
+**doctor** prints any missing toolchain command after each sync
+(§00-05.8.1), and the **critical-decisions banner** renders on the docs
+home whenever `.arc100/PENDING-INDEX-DECISIONS.yml` is present (§00-05.6).
+Nothing changes the index without an operator running the tool.
 
 ### 00-05.11 — Security posture
 
-The install surface is the **curl-to-bash + moving-tag** supply-chain
-pattern. This shape is well-understood: the trust anchor is the
-GitHub repo + tag, and a compromise of either compromises every
-downstream install on the next run. Four mitigations bound the
-attack surface:
+The distribution surface is no longer curl-to-bash. It is a **clone of a
+public git mirror that the adopter then runs** (§00-05.8). The trust
+anchor is therefore the public mirror itself plus three properties:
 
-1. **TLS hardening at every fetch.** `--proto '=https' --tlsv1.2
-   --max-redirs 2 --fail` on every curl invocation. A BASE_URL
-   host-pin assertion fires before any download so a tampered
-   `UPSTREAM_REPO` env override cannot redirect the fetch off-host.
-2. **Positive whitelist on every fetched path.** The installer's
-   embedded FILES array is validated by regex
-   (`^[A-Za-z0-9._/-]+$`) plus an explicit case filter rejecting
-   bare `.` or `..` and path-traversal segments. Whitelists are
-   provably complete; the previous-revision blacklist of shell
-   metacharacters was not.
-3. **Outbound HTTP hygiene in the conform engine.** A custom
-   `urllib.request.OpenerDirector` rejects redirects whose target
-   host is not on the allowlist (`raw.githubusercontent.com`,
-   `api.github.com`); requests carry an explicit `User-Agent`; size
-   capped at 1 MiB and content-type allowlisted to `text/plain`,
-   `text/markdown`, and `application/json` (the last for the
-   `api.github.com` JSON responses — the moving-tag refs lookup and the
-   phase-7 authenticated index fetch).
-4. **Authenticated-fetch hygiene (phase 7).** When a `GH_TOKEN` /
-   `GITHUB_TOKEN` is present, `install.sh` and `conform.py` fetch from
-   the `api.github.com` Contents API with a Bearer token instead of
-   `raw.githubusercontent.com` (§00-05.8.3); `api.github.com` was already
-   allowlisted, so no new egress host appears. The token is read from the
-   environment **only** — never on the command line (`install.sh` hands it
-   to `curl` through a `-K` config on stdin, so it is absent from `ps`
-   argv and leaves no temp file; `conform.py` places it only in a request
-   header), never written to disk, never echoed, and never reaches
-   `install-report.yml` or `state/`. The two modes are **host-disjoint**
-   (public → `raw.githubusercontent.com` only; authenticated →
-   `api.github.com` only), and the authenticated fetch carries the
-   `Authorization` header across **no** host-changing redirect:
-   `install.sh` sets `--max-redirs 0`, and `conform.py`'s redirect handler
-   strips `Authorization` whenever a redirect target host differs from the
-   issuing host. A least-privilege fine-grained, read-only, single-repo
-   token is recommended.
+- **Public mirror + `vN` immutability.** The mirror is public, so its
+  history is observable; the `vN` index tags never move, so a pinned
+  adopter resolves the same git objects on every clone. Git's own object
+  hashing is the transport integrity check — there is no CDN-served raw
+  fetch, no moving "current" tag, and no first-run SHA-drift trust step to
+  defend.
+- **Out-of-band digest.** Each release's notes carry a digest of the
+  published payload (§00-05.9.1). It is the cross-check an adopter can
+  compare a fresh clone against, deliberately kept *out of band* (in the
+  human-read release notes) rather than served from the same endpoint as
+  the bytes it would vouch for.
+- **You are running upstream code.** `arc_sync.py` is payload-delivered
+  and executed on the adopter's machine (§00-05.7). That is the residual
+  trust surface, stated plainly: a sync tool that writes the adopter's
+  files runs on the adopter's machine. The tool is a single auditable
+  Python file (stdlib + PyYAML, no network), so "read before you run" is
+  available to anyone who wants it.
 
-**Authenticated mode is an access control, not an integrity control.**
-The token gates *who may fetch* the private repository's bytes; it adds no
-provenance or tamper-evidence to those bytes. A private-mode install has
-exactly the same trust shape as a public-mode one: the moving-tag TOFU
-posture is unchanged, and the deferred per-file SHA256 decision below
-applies identically. Authentication changes **confidentiality** (the repo
-may stay private), not integrity. Phase 7 adds no distributed FILES entry,
-so the TM-2b-5 SHA-deferral trigger set is unchanged.
+Two code-level guards survive from the previous model, reframed for the
+clone-and-run shape — they are the part of the posture that defends
+against a *malformed or hostile payload*, not against the transport:
 
-**Intentionally deferred.** Per-file SHA256 pinning was considered
-and rejected for v1: regenerating the hash list on every moving-tag
-update is an operational cost that would likely be skipped, producing
-a *worse* posture (stale-hash false security) than no pinning at all.
-The deferral is time-limited; revisit when any of three triggers
-fires — a second ARC-100 maintainer appears, the FILES array grows
-past ~25 entries, or any downstream project ships ARC-100-SYNC into
-a regulated environment.
+1. **Write-target path containment.** Every file the tool writes is
+   resolved through `contained_path(target, rel)`, which validates the
+   relative path against `_PATH_WHITELIST_RE` (`^[A-Za-z0-9._/-]+$`),
+   rejects absolute paths and `..` traversal segments, and refuses any
+   path that resolves outside `--target` — raising `PathEscapeError`
+   otherwise. A payload (or a `local_index_path` override) cannot make the
+   tool write outside the project root.
+2. **Untrusted-content escaping.** Upstream index text rendered into the
+   decision file is escaped by `md_cell_escape`: a field with control
+   bytes (`_CONTROL_BYTES_RE`), an HTML tag (`_HTML_TAG_RE`), or over
+   `FIELD_MAX_CHARS` returns the `MalformedUpstream` sentinel, which
+   re-labels its block to `malformed_upstream` (§00-05.5 / §00-05.6)
+   rather than landing raw in the YAML. The queue cannot itself become an
+   injection surface.
 
 A future security-band chapter (proposed `93-01 Supply Chain Trust`,
-`93-02 Untrusted Content Rendering`, `93-03 Outbound HTTP Hygiene`)
-will codify these decisions in their canonical home. Until that band
-exists, this chapter is the reader-facing record of the posture, and
-the implementation plans (phase_2a + phase_2b) carry the per-
-mitigation rationale.
+`93-02 Untrusted Content Rendering`, `93-03 Outbound HTTP Hygiene`) will
+codify these decisions in their canonical home. Until that band exists,
+this chapter is the reader-facing record of the posture, and the v2
+implementation plans carry the per-guard rationale.
 
 ### 00-05.12 — Open architectural questions
 
-The following questions surfaced during plan-building and were not
-resolved by either the simplifier or threat-modeler passes. They are
-left explicit here so that this chapter can be a productive surface
-for review rather than a settled fait accompli.
+The following questions surfaced during plan-building. Several have since
+been resolved by the clone-and-run model the v2 phases built; those are
+marked in place (the `Q` label is kept stable so older citations still
+land). The rest remain productive surfaces for review.
 
-**Q1 — How many skills can `arc-100-librarian` carry before it
-splits?** The librarian now hosts three distinct skills: Slot
-allocation, Schema sweep, and Resolution (folded in from the former
-`index-resolution-librarian`). Three is fine; what is the test for
-when a fourth skill belongs in the librarian versus in a new agent?
-A skill-count cap is too crude; a per-skill prohibition coherence
-check might be the right test, but it is unwritten.
+**Q1 — How many skills can `arc-100-librarian` carry before it splits?**
+The librarian hosts three distinct skills: Slot allocation, Schema sweep,
+and Resolution — the last now narrowed to *filling in* each decision
+block's `decision:` (`accept`/`reject`) for `arc_sync.py` to apply on its
+next run, rather than applying anything itself (§00-05.6). Three is fine;
+what is the test for when a fourth skill belongs in the librarian versus
+in a new agent? A skill-count cap is too crude; a per-skill prohibition
+coherence check might be the right test, but it is unwritten.
 
-**Q2 — Is moving-tag-by-default the right choice?** Today the
-moving `ARC-100-CURRENT` is the default and the immutable `ARC-
-100.N` is the opt-in. The threat model accepts this on the basis
-that the install one-liner is the discovery surface and shows both
-forms. An alternative inversion — immutable-tag default, moving-tag
-opt-in — would make convenience an explicit choice. Worth
-deliberation now, before downstream projects have memorised the
-current default.
+**Q2 — Is moving-tag-by-default the right choice? (Resolved — moot.)**
+The moving "current" tag is gone. Distribution is a clone of the
+mirror: HEAD of `main` is the current content and immutable `vN` tags
+version the index (§00-05.9). There is no moving-vs-immutable *default* to
+choose — `main` is the convenience pointer, a `vN` checkout is the
+reproducible pin. The question no longer applies.
 
-**Q3 — Why is the `bulk_change` threshold 20?** The choice of 20
-auto-applies per run as the cap is plausible but unjustified. It
-should bound a realistic adversary (one upstream commit can rewrite
-~170 entries) without false-positive-rejecting a real ARC-100
-revision (a major version bump might legitimately renumber tens of
-entries). The chapter does not record either bound's evidence; a
-later revision should.
+**Q3 — Why is the `bulk_change` threshold what it is?** The cap survives
+the rewrite, now as a two-part formula rather than a flat number: escalate
+the whole batch when `changed > 10`, or when `changed >= 3` and
+`changed > 0.20 × inherited` (§00-05.5). It should bound a realistic
+adversary (one upstream commit can rewrite the whole index) without
+false-positive-rejecting a legitimate ARC-100 revision. The formula's
+constants are plausible but their evidence is still unrecorded; a later
+revision should record it.
 
-**Q4 — Fail-fast or queue on `malformed_upstream`?** The current
-contract queues a malformed entry as a decision for human review.
-A counter-argument: if an upstream entry contains HTML tags or
-control bytes, the upstream is either compromised or has a bug;
-neither is a routine "decide what to do" situation. Exit 2 with a
-loud error may be the better default; the queue then handles
-ambiguous cases only.
+**Q4 — Fail-fast or escalate on `malformed_upstream`?** The current
+contract escalates a malformed entry as a decision for human review. A
+counter-argument: if an upstream field contains HTML tags or control
+bytes, the upstream is either compromised or has a bug; neither is a
+routine "decide what to do" situation. Exit 2 with a loud error may be the
+better default, with the queue then handling ambiguous cases only.
 
-**Q5 — Where does `state/` audit history live?** The conform
-engine writes `pending_decisions.md` (transient) and `last_sync.
-json` (resolved-SHA pointer). After a decision is resolved, the
-row is removed and the audit trail is gone. A separate `state/
-resolved.log` (append-only, never deleted) would preserve a record
-of past decisions for post-hoc review without re-flooding the
-pending queue. Not in scope for v1; flagged for v2.
+**Q5 — Where does decision audit history live? (Partly resolved.)** The
+old transient markdown decision queue left no trail once a row was
+resolved. Under the new model, an answered
+`.arc100/PENDING-INDEX-DECISIONS.yml` is **archived** to
+`.arc100/decisions-archive/` on the run that applies it (§00-05.6), so
+past decisions are preserved without re-flooding the pending queue. What
+remains open is whether the archive needs a consolidated, queryable form
+rather than a directory of dated files.
 
-**Q6 — Project-to-upstream promotion path.** Downstream projects
-allocate their own slots (`arc_100: false`). Some of those slots
-may, over time, be of general utility — a CS-100 entry on
-"detection rule schema" might belong in the broader ARC-100
-specification. There is currently no documented mechanism for
-proposing a downstream entry's promotion to upstream. This is a
-governance question, not a code question, but it shapes the
-identity model (the ULID changes? stays? a new ULID is minted at
-promotion time and the old becomes a redirect?).
+**Q6 — Project-to-upstream promotion path.** Projects allocate their own
+slots (`arc_100: false`). Some of those slots may, over time, be of
+general utility — a CS-100 entry on "detection rule schema" might belong
+in the broader ARC-100 specification. There is currently no documented
+mechanism for proposing a project entry's promotion to upstream. This is a
+governance question, not a code question, but it shapes the identity model
+(the ULID changes? stays? a new ULID is minted at promotion time and the
+old becomes a redirect?).
 
-**Q7 — Librarian template forking.** The librarian template is
-copied verbatim from upstream into each downstream `.claude/agents/`.
-Downstream projects do not currently have a sanctioned way to add
-project-specific librarian behaviour without forking the file
-(which then drifts from upstream on every sync). A small project-
-config-layer (e.g., a downstream `arc-100-librarian.local.md` that
-the agent reads alongside its base) would unblock this without
-forking. Not in scope for v1.
+**Q7 — Librarian template forking.** The librarian template is delivered
+verbatim from upstream into each adopter's `.claude/agents/`. Projects do
+not currently have a sanctioned way to add project-specific librarian
+behaviour without forking the file (which then drifts from upstream on
+every sync). A small project-config-layer (e.g., a downstream
+`arc-100-librarian.local.md` that the agent reads alongside its base)
+would unblock this without forking. Not yet in scope.
 
-These are the seven questions worth explicit deliberation before the
-implementation plans land. A future revision of this chapter should
-record their resolution and the reasoning behind it.
+A future revision should record each open question's resolution and the
+reasoning behind it.
 
 ### 00-05.13 — Out-of-scope topics
 
 The following are explicitly *not* part of ARC-100-SYNC:
 
-- **Chapter body diffing.** ARC-100-SYNC reconciles the *index*
-  (`00-01`). The body of each chapter is the project's own; the
-  conform engine never touches `docs/00/00-XX_*.md` content. If
-  upstream rewrites the prose of a chapter, downstream may or may not
-  adopt the rewrite — that is a content-curation decision outside
-  this system's scope.
-- **Configuration ≠ content.** Phase 4b distributes the
-  documentation-system *configuration* (the master-index hook
-  template, `mkdocs.yml.template`, home-page assets, Inter fonts,
-  the standalone Architectural-Model page template — §00-05.8.2),
-  not the chapter content of any individual project's books.
-  Conversely, chapter content distribution (§00-05.8.1 D7 — Book 00
-  chapters at downstream's `docs/00/`) does not touch the rendering
-  configuration. The two surfaces are synchronised by the same
-  `install.sh` but managed independently per downstream-owned-file
-  refresh discipline (see [00-07 Getting Started](00-07_ARC-100_Getting_Started.md)
-  §00-07.4); the conform engine itself never touches `mkdocs.yml`, the
-  hook copy at `_hooks/`, `assets/arc100/*`, or
-  `docs/architectural-model.md`.
-- **Bidirectional sync.** ARC-100-SYNC is one-way: upstream → down­
-  stream. Promoting a downstream entry to upstream is governed by
-  Q6 above and is currently a manual, off-mechanism activity.
+- **Non-Book-00 chapter body diffing.** For a project's own books, the
+  tool reconciles the *index* (slot identity only — §00-05.5); the body
+  of each project chapter is the project's own and is never touched. If
+  upstream were to influence such prose, that would be a content-curation
+  decision outside this system's scope. (Book 00 is the exception noted
+  below.)
+- **Configuration ≠ content.** The payload distributes the
+  documentation-system *configuration* (the master-index hook, the
+  home-page assets and fonts, the `mkdocs.yml` and Architectural-Model
+  templates — §00-05.8.2) and the chapter *content* (Book 00 bodies + the
+  upstream index — §00-05.8) as independent surfaces, separated by file
+  class. The reconcile itself never rewrites a project's own `mkdocs.yml`,
+  its hook copy at `_hooks/`, `assets/arc100/*`, or its
+  Architectural-Model page beyond what the mirror/seed classes deliver.
+- **Bidirectional sync.** ARC-100-SYNC is one-way: upstream → downstream.
+  Promoting a project entry to upstream is governed by Q6 above and is
+  currently a manual, off-mechanism activity.
 - **Cross-downstream sync.** Two `<PROJECT>-100` projects do not
-  synchronise with each other through this tool; both synchronise
-  with the same upstream ARC-100.
-- **Plan / decision-log sync.** Implementation plans and decision
-  logs (Book 12) are project-internal artifacts; ARC-100-SYNC does
-  not propagate them.
-- **Book 00 body sync from upstream to downstream.** Phase 3.1
-  establishes the structural separation (master vault holds the
-  standard; downstream `docs/00/` mirrors it). Phase 4 (specifically
-  the post-phase-3.1 revision pass against `phase_4b.md`) extends the
-  conform engine to body-sync Book 00 chapters wholesale, with the
-  trust posture worked out in that phase's threat-modeler pass.
-  Until phase 4 lands, downstream `docs/00/` files receive a one-time
-  copy at bootstrap and are not subsequently updated from upstream.
+  synchronise with each other through this tool; both synchronise with
+  the same upstream ARC-100.
+- **Plan / decision-log sync.** Implementation plans and decision logs
+  (Book 12) are project-internal artifacts; ARC-100-SYNC does not
+  propagate them.
+
+**A correction to a prior out-of-scope claim.** Earlier revisions listed
+"Book 00 body sync" as out of scope — downstream `docs/00/` received a
+one-time copy at bootstrap and was not subsequently updated. That is no
+longer true: **Book 00 bodies are now full-mirror-class** and are synced
+on every run (`mirror/docs/00/00-*.md`, hash-detected, backed up before
+overwrite — §00-05.5 / §00-05.8). The *index-only* reconcile applies to
+non-Book-00 entries; Book 00 chapters, being an immutable downstream
+mirror, are delivered whole.
 
 ### 00-05.14 — Pointers
 
 - [00-07 Getting Started](00-07_ARC-100_Getting_Started.md) — the
-  consolidated a-priori onboarding chapter (install, post-install, first
-  sync, where your docs go, the two agents, removal, troubleshooting). It
-  absorbed the former `ARC-100-SYNC/docs/README.md` install+workflow
-  reference and the standalone `website/GETTING_STARTED.md`, both retired.
-- `versions/v1/implementation/phase_2a.md` — implementation plan for
-  the engine, librarian Resolution skill, inlined-banner hook, slash
-  commands, configs.
-- `versions/v1/implementation/phase_2b.md` — implementation plan for
-  the curl installer, the sync-check hook, this chapter's 00-01 index
-  entry, and the consolidated reference doc.
+  consolidated a-priori onboarding chapter (clone-and-run, first sync,
+  where your docs go, the two agents, removal, troubleshooting).
+- `versions/v2/implementation/` — the v2 phase plans that built the
+  clone-and-run model: the public mirror + publish pipeline, the
+  `arc_sync.py` sync-and-rectify core (mirror/seed classes, 3-way ULID
+  reconcile, doctor), the convention-derived index, the `/sync-arc-100`
+  command + librarian fill-in skill, and these chapter rewrites.
+- `ARC-100-SYNC/scripts/arc_sync.py` — the built tool itself; the
+  authoritative record of every mechanic this chapter asserts.
 
 ## Revisions
 
@@ -886,3 +843,4 @@ The following are explicitly *not* part of ARC-100-SYNC:
 | 2026-06-01 | Revision 9: phase 6b — publish the release tags so the documented install one-liner and the conform fetch resolve. Root cause: the tag-publishing step was manual and undocumented-as-process, so it was never executed — `origin` carried `refs/heads/main` only, no tags, and every documented `ARC-100-CURRENT` / `ARC-100.1` URL 404'd. Added §00-05.9.1 — Release procedure (commit+push `main` → `release.sh` dry-run then `--execute` → push both tags by hand → `test_publish.sh`; moving-vs-immutable rule; version↔tag correspondence; raw-CDN ~5-min cache caveat). New ARC-100-self tooling (NOT distributed; not in `install.sh` FILES): `ARC-100-SYNC/scripts/release.sh` (dry-run-default tag cutter with guards — clean tree, HEAD==origin/main via fresh `ls-remote`, `--version` minor == inventory `arc_100_version`, immutable-never-moves; `--execute` creates LOCAL tags and records SHA-annotated push commands to `state/release-push-commands.sh`, never pushes) and `ARC-100-SYNC/scripts/test_publish.sh` (published-install acceptance gate — the real one-liner into a throwaway external project; asserts no-404, namespace isolation into `<PROJECT>-100/`, dev-docs byte-for-byte intact, Book 00 present). The published-install test is now the end-to-end acceptance gate (supersedes "offline harness exits 0" as the sole acceptance). `GATE: security-critical` active (threat-modeler + secure-coder); `install.sh` / `conform.py` *behaviour* unchanged (publish-only). See `versions/v1/implementation/phase_6b.md`. |
 | 2026-06-01 | Revision 10: phase 7 authenticated private-repo install + sync. Added §00-05.8.3 — Two distribution modes: public and private — describing the token-presence switch (no token → public `raw.githubusercontent.com`, byte-for-byte the pre-phase-7 path; token in env → `api.github.com` Contents API with a Bearer header), carried by the *same* `install.sh` and `conform.py`; `install.sh` requests `application/vnd.github.raw` (bytes to disk), `conform.py` requests `application/vnd.github+json` and base64-decodes `.content` (response content-type stays `application/json`, already allowlisted — no widening). Extended §00-05.11 with a 4th mitigation (Authenticated-fetch hygiene): token from env only (stdin `curl -K` config, never argv/disk/log/`install-report.yml`/`state/`; header-only in `conform.py`), host-disjoint modes, and no `Authorization` carried across a host-changing redirect (`install.sh` `--max-redirs 0`; `conform.py` redirect handler strips `Authorization` on host change — threat-modeler A1). Fixed the stale §00-05.11 mitigation-3 content-type sentence (now lists `application/json` alongside `text/plain`/`text/markdown`, matching `conform.py`'s `ALLOWED_CONTENT_TYPES`). Added the explicit statement that authenticated mode is an **access/confidentiality** control, not an integrity control — same moving-tag TOFU posture and unchanged TM-2b-5 SHA-deferral trigger as public mode. No new distributed FILES entry (`test_publish.sh --auth` is the ARC-100-self acceptance only). Distributed `templates/book-00/00-05` twin updated byte-identically. No edits to §00-05.1–§00-05.7, §00-05.9, §00-05.10, or §00-05.12–§00-05.14. See `versions/v1/implementation/phase_7.md`. |
 | 2026-06-02 | Revision 11: Book 00 single-source-of-truth — retired the `ARC-100-SYNC/templates/book-00/` distribution twin. Root cause: the eight Book 00 chapters were committed in two places (`master-vault/docs/00/` and `ARC-100-SYNC/templates/book-00/`) and hand-synced "byte-identically" on every edit; the twin had already silently drifted (`00-01` was missing the 00-07 inventory entry, so a fresh install seeded a Book 00 index that omitted Getting Started). `install.sh` now sources Book 00 **directly** from the `master-vault/docs/00/` production-of-record — the same path `conform.py` already reads for the index (L278/L302) — via a new `BOOK00_CHAPTERS` basename array (the 8 chapters are removed from the `FILES` manifest, since a `FILES` entry fetches to its own relative path and would litter the downstream with a stray `master-vault/` tree). The first-install delivery does per-chapter `arc100_backup_if_exists` + `arc100_fetch master-vault/docs/00/<name>` straight into the downstream's namespace `${DOCS_ROOT}/00/` (no staging copy); the 8-chapter post-loop assertion and basename whitelist (defence-in-depth under `set -o noglob`) are preserved, and the public/authenticated fetch switch (phase 7 D1) carries over unchanged. The `ARC-100-SYNC/templates/book-00/` tree is deleted. Updated the §00-05.3.1 components table row (Book 00 no longer staged under `templates/`) and the ARC-100-self gates: `test_install.sh` delivers Book 00 from the local `${REPO}/master-vault` checkout; `test_publish.sh` derives its expected Book 00 count from the fetched installer's `BOOK00_CHAPTERS` array (was: `FILES` `templates/book-00/` grep). `00-00` §00-00.11 Hard Rules prose updated to state Book 00 has no in-repo twin. No behaviour change for downstreams (same chapters land at the same `docs/00/` paths). No edits to §00-05.1–§00-05.7, §00-05.9–§00-05.14. |
+| 2026-06-14 | Revision 12: phase 3d — clone-and-run mirror rewrite. Rewrote the chapter from the curl-installer / moving-tag / conform-engine model to the model the v2 phases built: distribution is a depth-1 clone of the public mirror `titanium4638/ARC-100-dist` run as `python3 <clone>/tools/arc_sync.py --target .`; HEAD of `main` is the current content and immutable `vN` tags version the index (two-axis versioning); the tool is self-contained (Python 3 stdlib + PyYAML, no network); delivery is by mirror class (hash-detect + dated `.arc100/backups/`) and seed class (copy-if-absent); the index fold is a 3-way ULID reconcile (BASE/NEW/LOCAL) against the project's working index at `docs/01/01-01_<P>_Index.md`, with the upstream ARC-100 index landing read-only at `docs/00/00-01_…`; escalations are atomic-batch to `.arc100/PENDING-INDEX-DECISIONS.yml`, filled by the librarian (`accept`/`reject`) and applied on the next run; the banner detects by file presence; the doctor prints prepared toolchain commands (never runs them); integrity is the public mirror + `vN` immutability + an out-of-band digest. Renamed §00-05.3 "conform contract" → "sync-and-rectify contract" while KEEPING the `#c4-conform-contract` anchor (heading word changed, anchor id preserved to avoid breaking links). **DELETED** the §00-05.8.3 leaf (public/private token-auth mode) and every cross-ref to it (incl. the former §00-05.11 mitigation 4). **REPURPOSED** §00-05.10 (Scheduling): the retired hourly sync-check hook / 3600s daemon / `sync_check.log` model removed; refilled with the operator-invoked / no-daemon / doctor+banner shape. Corrected two facts: `FIELD_MAX_CHARS` is 2000 (was "200 characters"); Book 00 bodies now full-mirror-sync (the old §00-05.13 "never touches `docs/00` content" / "one-time copy at bootstrap" claim is superseded — index-only reconcile is for non-Book-00 entries). Refreshed §00-05.5 to the eight real escalation kinds (dropped `upstream_deprecation` / `upstream_removal` / `upstream_sha_drift`; added the `malformed_upstream` auto-promotion re-label) and the two-part `bulk_change` formula (`changed > 10` OR `changed >= 3` AND `changed > 0.20 × inherited`), and to the `SYNCED_FIELDS_FULL` / `SLOT` field classes. No top-level section renumbered; all six `#c4-*` heading anchors preserved. v1 plan pointers → v2 / `arc_sync.py`. See `versions/v2/implementation/phase_3d.md`. |

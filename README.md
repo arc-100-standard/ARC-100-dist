@@ -5,7 +5,7 @@ PRs here.** This repository is the artifacts-only distribution channel for
 the ARC-100 documentation standard. The current release is always HEAD of
 `main`; `vN` tags are immutable bookmarks.
 
-Current release: **v1** (canonical source SHA `2ea37e1caa44599cd8475e276435867158c8d811`)
+Current release: **v1** (canonical source SHA `3d8ee83aea8b59b242048495fedd944decd736e3`)
 
 ## Quickstart
 
@@ -14,9 +14,11 @@ git clone --depth 1 https://github.com/titanium4638/ARC-100-dist.git "${TMPDIR:-
 cd /path/to/your-project && python3 "${TMPDIR:-/tmp}/ARC-100-dist/tools/arc_sync.py" --target .
 ```
 
-The target project must carry an `ARC-100-SYNC.config.yml` (keys:
-`project_name`, `local_index_path`) before the first run. Full adopter
-documentation ships with the standard's Book 00 chapters (`mirror/docs/00/`).
+The target project must carry an `ARC-100-SYNC.config.yml` whose
+only required key is `project_name`; `local_index_path` and
+`local_chapter_root` are optional overrides, convention-derived
+otherwise. Full adopter documentation ships with the standard's
+Book 00 chapters (`mirror/docs/00/`).
 
 ## Licensing
 

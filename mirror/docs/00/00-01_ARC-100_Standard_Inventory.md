@@ -49,6 +49,13 @@ companions: ["00-00_ARC-100_General.md"]
 - **Gaps are intentional.** Slot numbers absent from this index (e.g.,
   no book `42`, `43`, `44` in band 40-59) are deliberately left
   unallocated for project-specific use.
+- **This index vs your project's index.** In an adopting project this
+  file is a read-only mirror. The project's own table of contents is
+  the **working index** at chapter `01-01`, which starts as an exact
+  copy of this index at bootstrap and grows project-specific entries
+  from there; `arc_100: true` marks which working-index entries are
+  inherited from here. See
+  [`00-00` §00-00.10.1](00-00_ARC-100_General.md#00-00101-one-standard-two-indexes).
 
 ### 00-01.2 — Index block
 
@@ -150,8 +157,8 @@ books:
         title: "Synchronization"
         status: "active"
         location: "master"
-        description: "Architectural intent for ARC-100-SYNC — the portable toolkit that keeps a downstream <PROJECT>-100 documentation index in step with upstream ARC-100 over time. Documents the ULID-keyed identity model, the conform contract (deterministic auto-applied diffs vs human-judgment-required), the two operating modes (bootstrap, update), the judgment surface (pending decisions, banner, librarian Resolution skill), the distribution model (curl + embedded file list + moving and immutable tags), the security posture, and the open architectural questions for review. Implementation is owned by phase_2a + phase_2b plans in `versions/v1/implementation/`."
-        keywords: ["arc-100-sync", "conform", "synchronization", "ulid", "downstream", "install", "supply-chain"]
+        description: "Architectural intent for ARC-100-SYNC — the portable toolkit that keeps an adopting <PROJECT>-100 documentation index in step with upstream ARC-100 over time. Documents the ULID-keyed identity model, the sync-and-rectify contract (deterministic auto-applied index diffs vs human-judgment-required escalations), the three operating modes (bootstrap, refresh, lost-state), the judgment surface (the YAML decision file, banner, librarian fill-in), the distribution model (a depth-1 clone of the public mirror run via arc_sync.py, mirror/seed file classes, two-axis versioning), the security posture, and the open architectural questions for review. Implementation is owned by the v2 phase plans in `versions/v2/implementation/` and the built tool `ARC-100-SYNC/scripts/arc_sync.py`."
+        keywords: ["arc-100-sync", "sync", "synchronization", "ulid", "downstream", "clone", "supply-chain"]
       - id: "00-06"
         arc_100: true
         arc_100_ulid: 01KSE0GASHFB44EP78FVE2WDGP
@@ -166,8 +173,8 @@ books:
         title: "Getting Started"
         status: "active"
         location: "master"
-        description: "Onboarding guide for adopting ARC-100 in a project: install, post-install setup, first conform run, where project docs go, the two agents, removal, and troubleshooting."
-        keywords: ["getting-started", "install", "onboarding", "adopt", "downstream", "conform", "likec4", "agents"]
+        description: "Onboarding guide for adopting ARC-100 in a project: clone the public mirror and run the sync, post-sync setup, the first sync, where project docs go, the two agents, removal, and troubleshooting."
+        keywords: ["getting-started", "clone", "onboarding", "adopt", "downstream", "sync", "likec4", "agents"]
 
   - id: "01"
     arc_100: true

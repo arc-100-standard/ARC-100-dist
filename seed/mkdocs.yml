@@ -1,0 +1,119 @@
+# <PROJECT> is your project moniker (e.g. FLOW). Replace it below — the three
+# name fields are the only project-specific lines here.
+#
+# A synced project has exactly ONE mkdocs.yml rendering ONE site, whose index
+# page is generated from your 01-01 WORKING index by the master-index hook.
+# docs_dir is your existing `docs/` tree; `arc_sync.py` mirrors the ARC-100
+# Book 00 chapter bodies into `docs/00/` on each run. (Only the ARC-100 repo
+# itself runs two sites — the red standard + the green project; an adopter
+# runs just this one.)
+site_name: <PROJECT> Project
+site_description: <PROJECT_DESC>
+site_url: ""
+docs_dir: docs
+site_dir: site-<PROJECT>
+use_directory_urls: true
+
+# docs/likec4/ hosts the project-tree LikeC4 scoped install (per-tree split),
+# if you add one. It sits inside docs_dir because the site's tree root IS
+# docs/. Exclude it from the mkdocs scan so node_modules/ README files don't
+# surface as docs pages with broken strict-mode anchor links. The LikeC4
+# plugin still discovers the project via docs/00/model/likec4.config.json;
+# this exclusion only affects mkdocs's own file scan.
+exclude_docs: |
+  likec4/
+
+# The project's chapter files live in the sidebar via the master-index hook's
+# nav build, not via explicit declaration here, so not_in_nav just keeps the
+# sidebar tight. Your project's book numbers are unknowable here — add a glob
+# per book you exclude from nav. EXAMPLES (uncomment into the block below,
+# edited for your book numbers):
+#   /01/01-*.md
+#   /02/02-*.md
+#   /10/10-*.md
+not_in_nav: |
+  /architecture/index.md
+
+# The master-index hook generates this site's index page from your 01-01
+# working index and builds the sidebar nav. It is the ONLY hook a synced
+# project registers — there is deliberately NO sync-check hook (arc_sync.py
+# runs as a standalone tool, not a build hook). `extra.arc100_render_mode:
+# index` selects the project-index render (vs the standard's inventory-only
+# render).
+hooks:
+  - _hooks/arc100_master_index.py
+
+extra:
+  arc100_render_mode: index
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  # `palette.primary: custom` lets arc100.css drive
+  # `--md-primary-fg-color` from `--arc100-base` (overridden to
+  # dark-green via assets/arc100/theme-green.css). Material's named
+  # `green` palette would inject its own `[data-md-color-primary=green]`
+  # rules that out-specify the arc100.css override. See chapter 00-03
+  # §00-03.5.2.
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - sane_lists
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tilde
+
+plugins:
+  - search
+  - likec4:
+      use_dot: false
+
+# Phase 3.1b D3: shared tree-render assets centralized at repo-root
+# assets/arc100/; the master-index hook copies them into docs_dir on
+# every build via _copy_shared_assets. Same assets as the red site
+# minus the LikeC4 typography (the green site has no LikeC4 content
+# in phase 3.1b — chapter 00-06 is master-vault-only).
+extra_css:
+  - assets/arc100/fonts/inter.css
+  - assets/arc100/arc100.css
+  - assets/arc100/theme-green.css
+
+extra_javascript:
+  - assets/arc100/arc100.js

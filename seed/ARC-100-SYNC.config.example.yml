@@ -1,0 +1,51 @@
+# ARC-100-SYNC per-project config.
+#
+# Copy this file to your project root as `ARC-100-SYNC.config.yml` and set
+# `project_name` (the only required key). `arc_sync.py` detects bootstrap
+# (first run — no `.arc100/state.yml` yet) vs refresh (the state file is
+# present) automatically; there is nothing to toggle. Every other key below
+# is an OPTIONAL override — when omitted it is convention-derived from
+# `project_name` (each block states its derived default).
+
+# OPTIONAL — the literal, human-readable project name. Drives the rendered
+# home-page "<NAME> Index" heading: the master-index hook prefers this over
+# `project_name` when present, and falls back to `project_name` when absent
+# (so a greenfield install still renders a sensible heading). Free-form text;
+# write it as a double-quoted YAML scalar.
+# project_display_name: "Flow Render"
+
+# REQUIRED — the project's ARC-100 dialect name, e.g. FLOW-100, CS-100. It
+# drives the working-index conform markers (e.g. <!-- FLOW-100-INDEX-START -->)
+# and the derived index filename (01-01_<project_name>_Index.md). Must be a
+# single path segment: letters, digits, and `._-` only — no `/`, no
+# whitespace, no leading dot (it fuses into a real filename). See chapter
+# 00-05 §00-05.1.
+project_name: <PROJECT>-100
+
+# ─────────────────────────────────────────────────────────────────────────
+# The two-index model (why local_index_path points at 01-01, not 00-01).
+#
+# A synced project carries TWO indexes, both under docs/ — there is NO
+# separate `<PROJECT>-100/` namespace folder:
+#
+#   • docs/00/00-01_ARC-100_Standard_Inventory.md — the ARC-100 index,
+#     MIRRORED from upstream on every `arc_sync.py` run. Upstream-owned and
+#     immutable downstream: do not hand-edit it; the sync overwrites it. It
+#     is the canonical reference inventory of the ARC-100 standard itself.
+#
+#   • docs/01/01-01_<project_name>_Index.md — your WORKING index. Project-
+#     owned, hand-curated, and the index your single mkdocs site renders from
+#     (via the master-index hook). `local_index_path` points HERE.
+# ─────────────────────────────────────────────────────────────────────────
+
+# OPTIONAL override — where this project's WORKING index lives (chapter
+# 01-01, inside docs_dir). Set this only if your working index is not at the
+# conventional location.
+#   Derived default (when omitted): docs/01/01-01_<your project_name>_Index.md
+#   — e.g. for project_name FLOW-100, that is docs/01/01-01_FLOW-100_Index.md.
+# local_index_path: docs/01/01-01_<PROJECT>-100_Index.md
+
+# OPTIONAL override — the chapter-tree root the master-index hook strips to
+# make sidebar links docs_dir-relative ("00/...", "01/...").
+#   Derived default (when omitted): docs
+# local_chapter_root: docs

@@ -153,8 +153,8 @@ chapter contains. The authoritative slot inventory — every book and
 chapter across every band, with status and lineage fields — lives in
 `00-01`. The body-ownership and slot-identity rules that govern
 which books may host project-authored content are defined in
-[§00-00.7.1](#00-0071--chapter-and-book-lineage) and
-[§00-00.7.2](#00-0072--body-ownership-implied-by-book-number).
+[§00-00.7.1](#00-0071-chapter-and-book-lineage) and
+[§00-00.7.2](#00-0072-body-ownership-implied-by-book-number).
 
 | Chapter | Purpose |
 |---|---|
@@ -220,7 +220,9 @@ for the per-band book and chapter listing.
 #### 00-00.7.1 — Chapter and book lineage
 
 Every book and chapter entry in `00-01_ARC-100_Standard_Inventory.md` (and in any
-downstream `00-01_<PROJECT>-100_Index.md`) that originates with
+downstream **working index** — chapter `01-01`,
+`docs/01/01-01_<PROJECT>-100_Index.md`; see
+[§00-00.10.1](#00-00101-one-standard-two-indexes)) that originates with
 ARC-100 carries two related YAML fields:
 
 ```yaml
@@ -262,7 +264,7 @@ the `arc_100_ulid` is the canonical handle on that identity.
   the chapter's body content — ARC-100 provides the slot, intent,
   title, and ULID; the downstream project provides the substance.
 - Both fields are **preserved** on a chapter whose status becomes
-  `deprecated` or `superseded` (per [§00-00.6](#00-006--status-lifecycle)).
+  `deprecated` or `superseded` (per [§00-00.6](#00-006-status-lifecycle)).
   They record lineage, not endorsement: a deprecated
   ARC-100-inherited chapter retains its lineage so future readers
   (and the conformance tool) can trace where the slot came from.
@@ -298,7 +300,7 @@ ARC-100's `01-01 ARC-100 Project Index`, sharing a ULID), but the
 chapter body, description, keywords, and any sub-section structure
 are project-flavoured. The "fully inherited" semantic (body synced
 verbatim) applies only to Book 00 entries. See
-[§00-00.7.2](#00-0072--body-ownership-implied-by-book-number).
+[§00-00.7.2](#00-0072-body-ownership-implied-by-book-number).
 
 #### 00-00.7.2 — Body ownership implied by book number
 
@@ -310,7 +312,7 @@ from upstream) but their bodies are project-authored — each
 downstream fills in its own project-system, project-philosophy, and
 project-glossary content. Other `arc_100: true` entries in bands 20+
 follow the existing 01–49 / 50+ slot-split rule (see
-[§00-00.7](#00-007--band-allocation) rule 4 above).
+[§00-00.7](#00-007-band-allocation) rule 4 above).
 
 **Rule of thumb**: if the chapter belongs in Book 00 it is
 upstream-owned (synced verbatim); otherwise it is project-owned
@@ -411,6 +413,80 @@ In both paths, the ARC-100 system is bootstrapped directly in master.
 No version folder receives a copy of `00-01` until the first
 promote-version `--next <slug>` activates a version.
 
+#### 00-00.10.1 — One standard, two indexes
+
+ARC-100 is an **index standard**, not a documentation set. An adopting
+project therefore always holds **two** index files, with different
+owners and different jobs:
+
+| Index | Chapter | Downstream path | Owner | Job |
+|---|---|---|---|---|
+| The **ARC-100 index** | `00-01` | `docs/00/00-01_ARC-100_Standard_Inventory.md` | ARC-100 (upstream) | The standard itself. A read-only mirror, refreshed wholesale on every sync like all of Book 00. Reference material — never the basis of the project's site. |
+| The **working index** | `01-01` | `docs/01/01-01_<PROJECT>-100_Index.md` | The project | The project's table of contents — the single index its documentation site renders from, and the only index the project's librarian writes. |
+
+**Day zero: the two indexes are identical.** Bootstrap copies the
+ARC-100 index into the working index verbatim — same books, same
+chapters, same ULIDs; only the marker pair changes
+(`ARC-100-INDEX` → `<PROJECT>-100-INDEX`). At that instant `00-01`
+and `01-01` say exactly the same thing. This is the starting point,
+not the steady state.
+
+**Then they diverge — by design.** Exactly two motions drive the
+divergence, and both happen in the working index only:
+
+1. **The project fills inherited slots.** Chapters that ARC-100
+   pre-allocated (in Books 01 and up) get real `.md` files and
+   project-authored bodies; each slot's working-index status flips
+   from `placeholder` to `active` as its body is written. The slot
+   identity — number, title shape, ULID — stays upstream-owned
+   ([§00-00.7.2](#00-0072-body-ownership-implied-by-book-number)).
+2. **The project allocates new entries.** The librarian assigns the
+   chapters (and books) the project needs into the unallocated slots
+   ARC-100 deliberately left open (see `00-01` §00-01.4). These
+   entries exist **only** in the working index.
+
+**The `arc_100` flag is the discriminator**
+([§00-00.7.1](#00-0071-chapter-and-book-lineage)). Read any
+working-index entry and you know which world it belongs to:
+
+- `arc_100: true` — inherited from the ARC-100 index. Every entry of
+  the ARC-100 index remains present in the working index for the life
+  of the project — deprecated entries keep the flag, and numbers are
+  never re-allocated. The sync tool keeps these entries in step with
+  upstream and escalates anything that needs judgment.
+- `arc_100: false` — or the lineage fields omitted entirely, which
+  means the same thing — allocated by the project. Unique to the
+  working index; the sync never touches these entries.
+
+The invariant, stated plainly: **the working index is always a
+superset of the ARC-100 index** (as of its last sync with upstream).
+The mirrored `00-01` shows the pristine upstream standard; the
+difference between the two files is precisely the project's own
+documentation.
+
+**The ATA 100 lineage makes this concrete.** ATA 100 is an index, not
+a manual: chapter 32 means Landing Gear on every aircraft, and there
+are tens of thousands of aircraft maintenance manuals built on that
+numbering — none of which *is* ATA 100. Each manual keeps the shared
+chapter spine and adds its own aircraft's content. A `<PROJECT>-100`
+works the same way: the ARC-100 index is the shared spine
+(`arc_100: true`); the working index is the project's manual built on
+that spine — the standard's numbers where the standard speaks, the
+project's own chapters (`arc_100: false`) where it does not. (See the
+ATA 100 entry in `00-02`.)
+
+Three rules fall out of this:
+
+- **Never hand-edit the mirrored `00-01`** — it is Book 00, replaced
+  wholesale on the next sync ([§00-00.11](#00-0011-hard-rules)).
+- **Never delete an `arc_100: true` entry from the working index** —
+  deprecate it instead. The sync detects deletions of inherited
+  entries and escalates them for explicit human judgment.
+- **Never render the project's site from `00-01`** — a project has
+  exactly one `mkdocs.yml`, and its site renders from the working
+  index at `01-01`. (Only the ARC-100 repository itself runs a second
+  site, to publish the standard.)
+
 ### 00-00.11 — Hard rules
 
 These rules govern every agent and human that touches ARC-100:
@@ -445,18 +521,20 @@ These rules govern every agent and human that touches ARC-100:
 - **Book 00 is authored *here*; it is a read-only mirror *downstream*.**
   Within the ARC-100 standard repository — *this* repo: the canonical
   `master-vault/docs/00/` chapters are the single source of record. There
-  is no second in-repo copy: the installer (`ARC-100-SYNC/scripts/install.sh`)
-  distributes Book 00 to adopters by fetching `master-vault/docs/00/` directly,
-  so the chapters cannot drift against a twin. The standard's author has
-  full create/read/update/delete authority over them, subject only to the
+  is no second in-repo copy: the published distribution mirror is assembled
+  from `master-vault/docs/00/` at release time, so the chapters cannot
+  drift against an in-repo twin. Adopters obtain Book 00 by a depth-1 clone
+  of that published mirror, which `arc_sync.py` syncs (relpath-preserving)
+  into the downstream `docs/00/`. The standard's author has full
+  create/read/update/delete authority over them, subject only to the
   chapter-numbering rules (§00-00.4) and the `00-01` librarian rule above.
-  In a downstream `<PROJECT>-100`, those same chapters are **read-only
-  mirrors** delivered and refreshed by the conform engine
-  (`/conform-to-arc-100`); adopters must not hand-edit them, because local
+  In an adopting project (a `<PROJECT>-100` instance), those same chapters
+  are **read-only mirrors** delivered and refreshed by the ARC-100-SYNC
+  tool (`arc_sync.py`); adopters must not hand-edit them, because local
   edits are overwritten on the next sync. The "do not hand-edit Book 00"
-  guidance in `00-07` and the installer's next-steps echo is therefore the
-  *downstream* rule — it does **not** constrain authoring inside this
-  repository.
+  guidance in `00-07` and the next-steps output of `arc_sync.py` is
+  therefore the *downstream* rule — it does **not** constrain authoring
+  inside this repository.
 
 ### 00-00.12 — ARC-100 out-of-scope topics
 
