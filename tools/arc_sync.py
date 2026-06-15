@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import posixpath
 import re
 import shutil
 import sys
@@ -176,7 +177,7 @@ def contained_path(target: Path, rel: str) -> Path:
     Pure: reads the filesystem only via ``Path.resolve`` (no writes).
     Two layers, both required:
       1. Lexical whitelist ``^[A-Za-z0-9._/-]+$`` plus rejection of
-         absolute paths and any ``..`` segment (install.sh semantics).
+         absolute paths and any ``..`` segment.
       2. Load-bearing resolved check: ``Path(target, rel).resolve()``
          must be relative to ``target.resolve()`` — catches symlinked
          intermediate directories that the lexical check cannot.
@@ -1659,6 +1660,40 @@ def apply_decisions(
 # ---------------------------------------------------------------------------
 
 
+def _retarget_book00_links(md: str, config: Config) -> str:
+    """Seed-time link fix. The upstream index (00-01) lives flattened at the
+    standard's own ``docs_dir`` root, so its PROSE links to Book 00 chapters
+    are sibling-relative (``](00-NN_*.md``). Seeded verbatim into the working
+    index at ``<chapter_root>/01/01-01_*`` those break, because Book 00 lives a
+    directory across at ``<chapter_root>/00/``. Rewrite the link targets to the
+    relative path from the index's directory to ``<chapter_root>/00`` so they
+    resolve in the downstream tree. The source stays sibling-relative (the
+    standard's own red site is unaffected); only the seeded copy is retargeted.
+
+    Touches ONLY prose OUTSIDE the index marker block — the YAML between the
+    markers is (re)written from the entry dict by ``write_local_index`` and
+    uses ``[BB-CC §N]`` citations, not file links. Pure.
+    """
+    index_dir = config.local_index_path.parent.as_posix()
+    book00_dir = (config.local_chapter_root / "00").as_posix()
+    prefix = posixpath.relpath(book00_dir, index_dir)
+    if prefix in ("", "."):
+        return md  # index sits beside Book 00 — sibling links already resolve
+    link_re = re.compile(r"\]\((00-\d\d[^)\s#]*\.md)")
+
+    def retarget(seg: str) -> str:
+        return link_re.sub(lambda m: f"]({prefix}/{m.group(1)}", seg)
+
+    start = f"<!-- {config.project_name}-INDEX-START -->"
+    end = f"<!-- {config.project_name}-INDEX-END -->"
+    si = md.find(start)
+    ei = md.find(end)
+    if si == -1 or ei == -1:
+        return retarget(md)  # no marker block found — retarget the whole doc
+    ej = ei + len(end)
+    return retarget(md[:si]) + md[si:ej] + retarget(md[ej:])
+
+
 def bootstrap_index(
     payload_md: str,
     payload_dict: dict,
@@ -1673,6 +1708,9 @@ def bootstrap_index(
     target_md = payload_md.replace(
         UPSTREAM_START, f"<!-- {config.project_name}-INDEX-START -->"
     ).replace(UPSTREAM_END, f"<!-- {config.project_name}-INDEX-END -->")
+    # Retarget Book-00 prose links so they resolve from the working index's
+    # location (the upstream source keeps its sibling-relative links).
+    target_md = _retarget_book00_links(target_md, config)
     rel = config.local_index_path.as_posix()
     path = contained_path(target, rel)
     if path.is_file():

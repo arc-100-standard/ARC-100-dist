@@ -175,15 +175,15 @@ mechanical and subtle ones reviewable:
 
 | Component | Role |
 | --- | --- |
-| `tools/ulid.py` | Mints the stable 26-character ULID identity for each book and chapter entry (§00-05.2). |
+| `tools/ulid.py` | Mints the stable 26-character ULID identity for each book and chapter entry (§00-05.2). Delivered downstream **mirror-class** to `assets/arc100/tools/ulid.py`, so a re-sync refreshes it (with backup). |
 | `tools/arc_sync.py` | The sync-and-rectify tool: delivers the payload by file class, reconciles the upstream index against the project's working index by ULID, auto-applies the safe changes within the §00-05.5 bounds, and escalates the rest. Self-contained — Python 3 stdlib + PyYAML, no network. |
 | `mirror/docs/00/00-0X_*.md` | The Book 00 chapter bodies, delivered mirror-class (overwritten when upstream changes; a locally-edited copy is backed up first). |
 | `mirror/docs/00/00-01_ARC-100_Standard_Inventory.md` | The upstream ARC-100 index, delivered mirror-class as read-only reference; the project never renders from it (§00-05.5 / 00-00 §00-00.10.1). |
 | `mirror/_hooks/arc100_master_index.py` | mkdocs hook that generates the rendered index home page and prepends the critical-decisions banner (§00-05.6). |
-| `templates/agents/arc-100-librarian.md` | The ULID-aware chapter-discovery + index-curation agent, including the Resolution skill that fills in each queued decision (§00-05.6). Delivered to `.claude/agents/` (phase 4). |
-| `templates/agents/likec4-author.md` | The LikeC4 model-authoring agent (architecture model + embedded views; see 00-06). |
-| `templates/commands/sync-arc-100.md` | Slash command `/sync-arc-100` — clones the mirror, runs `arc_sync.py --target .`, surfaces the 0/1/2 exit code. |
-| `templates/commands/resolve-arc-100-issues.md` | Slash command `/resolve-arc-100-issues` — dispatches the librarian's Resolution skill to fill in the decision file's `decision:` cells; the *next* `arc_sync.py` run applies them. |
+| `templates/agents/arc-100-librarian.md` | The ULID-aware chapter-discovery + index-curation agent, including the Resolution skill that fills in each queued decision (§00-05.6). Delivered **mirror-class** to `.claude/agents/` (so a re-sync refreshes it, with backup). |
+| `templates/agents/likec4-author.md` | The LikeC4 model-authoring agent (architecture model + embedded views; see 00-06). Delivered **mirror-class** to `.claude/agents/`. |
+| `templates/commands/sync-arc-100.md` | Slash command `/sync-arc-100` — clones the mirror, runs `arc_sync.py --target .`, surfaces the 0/1/2 exit code. Delivered **mirror-class** to `.claude/commands/`. |
+| `templates/commands/resolve-arc-100-issues.md` | Slash command `/resolve-arc-100-issues` — dispatches the librarian's Resolution skill to fill in the decision file's `decision:` cells; the *next* `arc_sync.py` run applies them. Delivered **mirror-class** to `.claude/commands/`. |
 | `seed/ARC-100-SYNC.config.example.yml` | Annotated config template, delivered seed-class (copy-if-absent); a project copies it to `ARC-100-SYNC.config.yml` and sets `project_name` (§00-05.8). |
 | `seed/` (config, assets, placeholders) + `mirror/` (assets, fonts, the LikeC4 toolchain) | The distributed configuration standard and toolchain — site config and the standalone Architectural-Model page seeded copy-if-absent; home-page assets + Inter fonts + the hook delivered mirror-class (§00-05.8.1 / §00-05.8.2). |
 | `.arc100/` (per-project state, created by the tool) | Durable state at `.arc100/state.yml` (release pointers, synced-file hashes, the index `BASE` snapshot); the transient `.arc100/PENDING-INDEX-DECISIONS.yml`; dated `.arc100/backups/`; answered files archived under `.arc100/decisions-archive/`. Lives at the project root, outside any `docs_dir`. |
@@ -448,17 +448,21 @@ ContainerView
 ### 00-05.8 — Distribution { #c4-distribution }
 
 ARC-100-SYNC is distributed as a **public git mirror** that the adopter
-**clones and runs**. The mirror is `titanium4638/ARC-100-dist`; a sync is
-a depth-1 clone of it followed by one command:
+**clones and runs**. The mirror is `titanium4638/ARC-100-dist`; first-run
+onboarding is a depth-1 clone followed by one command — the name-first
+`RUN_FIRST.sh` (00-07 §00-07.2):
 
 ```bash
 git clone --depth 1 https://github.com/titanium4638/ARC-100-dist.git "${TMPDIR:-/tmp}/ARC-100-dist"
-python3 "${TMPDIR:-/tmp}/ARC-100-dist/tools/arc_sync.py" --target .
+bash "${TMPDIR:-/tmp}/ARC-100-dist/RUN_FIRST.sh" ACME
 ```
 
-The clone is throwaway — it is the delivery vehicle, not part of the
-project tree. `--target` is the project root; `--source` is unnecessary
-(it defaults to the clone root).
+`RUN_FIRST.sh` builds the named `ACME-100/` instance folder, writes its
+config + `config.json`, runs the underlying `arc_sync.py --target ACME-100`,
+and substitutes the seed `<PROJECT>` tokens. The clone is throwaway — the
+delivery vehicle, not part of the project tree. Later re-syncs call
+`arc_sync.py --target .` directly from inside the instance (`--source`
+defaults to the clone root).
 
 **What the mirror's refs mean.** Two axes, deliberately separate
 (§00-05.9):
@@ -479,11 +483,21 @@ expects:
   downstream target path (relpath-preserving, no remapping). This carries
   the Book 00 chapter bodies (`mirror/docs/00/00-*.md`), the upstream
   index (`mirror/docs/00/00-01_ARC-100_Standard_Inventory.md`), the
-  master-index hook (`mirror/_hooks/`), and the home-page assets + fonts.
+  master-index hook (`mirror/_hooks/`), the home-page assets + fonts, the
+  ULID minter (`mirror/assets/arc100/tools/ulid.py`), and the four
+  ARC-100-owned `.claude/` agents + slash commands
+  (`mirror/.claude/agents/`, `mirror/.claude/commands/`) — all mirror-class,
+  so a re-sync refreshes them with backup.
 - `seed/` — copy-if-absent files, stored under their **final target
   names**: the config example, the site-config template, the
   Architectural-Model page placeholder.
-- `tools/arc_sync.py` — the tool itself, run from the clone.
+- `RUN_FIRST.sh` — the name-first onboarding script at the **payload root**:
+  it captures the system name, creates the `<NAME>-100/` instance folder +
+  its `config.json`, runs `arc_sync.py --target <NAME>-100`, and
+  substitutes the seed `<PROJECT>` tokens (§00-07.2). First-run only — a
+  re-sync calls `arc_sync.py` directly.
+- `tools/arc_sync.py` — the tool itself, run from the clone (directly, or
+  via `RUN_FIRST.sh`).
 - `payload.yml` — `release_tag` (the index axis) and `source_sha` (the
   content axis), supplied at publish time.
 
@@ -844,3 +858,4 @@ mirror, are delivered whole.
 | 2026-06-01 | Revision 10: phase 7 authenticated private-repo install + sync. Added §00-05.8.3 — Two distribution modes: public and private — describing the token-presence switch (no token → public `raw.githubusercontent.com`, byte-for-byte the pre-phase-7 path; token in env → `api.github.com` Contents API with a Bearer header), carried by the *same* `install.sh` and `conform.py`; `install.sh` requests `application/vnd.github.raw` (bytes to disk), `conform.py` requests `application/vnd.github+json` and base64-decodes `.content` (response content-type stays `application/json`, already allowlisted — no widening). Extended §00-05.11 with a 4th mitigation (Authenticated-fetch hygiene): token from env only (stdin `curl -K` config, never argv/disk/log/`install-report.yml`/`state/`; header-only in `conform.py`), host-disjoint modes, and no `Authorization` carried across a host-changing redirect (`install.sh` `--max-redirs 0`; `conform.py` redirect handler strips `Authorization` on host change — threat-modeler A1). Fixed the stale §00-05.11 mitigation-3 content-type sentence (now lists `application/json` alongside `text/plain`/`text/markdown`, matching `conform.py`'s `ALLOWED_CONTENT_TYPES`). Added the explicit statement that authenticated mode is an **access/confidentiality** control, not an integrity control — same moving-tag TOFU posture and unchanged TM-2b-5 SHA-deferral trigger as public mode. No new distributed FILES entry (`test_publish.sh --auth` is the ARC-100-self acceptance only). Distributed `templates/book-00/00-05` twin updated byte-identically. No edits to §00-05.1–§00-05.7, §00-05.9, §00-05.10, or §00-05.12–§00-05.14. See `versions/v1/implementation/phase_7.md`. |
 | 2026-06-02 | Revision 11: Book 00 single-source-of-truth — retired the `ARC-100-SYNC/templates/book-00/` distribution twin. Root cause: the eight Book 00 chapters were committed in two places (`master-vault/docs/00/` and `ARC-100-SYNC/templates/book-00/`) and hand-synced "byte-identically" on every edit; the twin had already silently drifted (`00-01` was missing the 00-07 inventory entry, so a fresh install seeded a Book 00 index that omitted Getting Started). `install.sh` now sources Book 00 **directly** from the `master-vault/docs/00/` production-of-record — the same path `conform.py` already reads for the index (L278/L302) — via a new `BOOK00_CHAPTERS` basename array (the 8 chapters are removed from the `FILES` manifest, since a `FILES` entry fetches to its own relative path and would litter the downstream with a stray `master-vault/` tree). The first-install delivery does per-chapter `arc100_backup_if_exists` + `arc100_fetch master-vault/docs/00/<name>` straight into the downstream's namespace `${DOCS_ROOT}/00/` (no staging copy); the 8-chapter post-loop assertion and basename whitelist (defence-in-depth under `set -o noglob`) are preserved, and the public/authenticated fetch switch (phase 7 D1) carries over unchanged. The `ARC-100-SYNC/templates/book-00/` tree is deleted. Updated the §00-05.3.1 components table row (Book 00 no longer staged under `templates/`) and the ARC-100-self gates: `test_install.sh` delivers Book 00 from the local `${REPO}/master-vault` checkout; `test_publish.sh` derives its expected Book 00 count from the fetched installer's `BOOK00_CHAPTERS` array (was: `FILES` `templates/book-00/` grep). `00-00` §00-00.11 Hard Rules prose updated to state Book 00 has no in-repo twin. No behaviour change for downstreams (same chapters land at the same `docs/00/` paths). No edits to §00-05.1–§00-05.7, §00-05.9–§00-05.14. |
 | 2026-06-14 | Revision 12: phase 3d — clone-and-run mirror rewrite. Rewrote the chapter from the curl-installer / moving-tag / conform-engine model to the model the v2 phases built: distribution is a depth-1 clone of the public mirror `titanium4638/ARC-100-dist` run as `python3 <clone>/tools/arc_sync.py --target .`; HEAD of `main` is the current content and immutable `vN` tags version the index (two-axis versioning); the tool is self-contained (Python 3 stdlib + PyYAML, no network); delivery is by mirror class (hash-detect + dated `.arc100/backups/`) and seed class (copy-if-absent); the index fold is a 3-way ULID reconcile (BASE/NEW/LOCAL) against the project's working index at `docs/01/01-01_<P>_Index.md`, with the upstream ARC-100 index landing read-only at `docs/00/00-01_…`; escalations are atomic-batch to `.arc100/PENDING-INDEX-DECISIONS.yml`, filled by the librarian (`accept`/`reject`) and applied on the next run; the banner detects by file presence; the doctor prints prepared toolchain commands (never runs them); integrity is the public mirror + `vN` immutability + an out-of-band digest. Renamed §00-05.3 "conform contract" → "sync-and-rectify contract" while KEEPING the `#c4-conform-contract` anchor (heading word changed, anchor id preserved to avoid breaking links). **DELETED** the §00-05.8.3 leaf (public/private token-auth mode) and every cross-ref to it (incl. the former §00-05.11 mitigation 4). **REPURPOSED** §00-05.10 (Scheduling): the retired hourly sync-check hook / 3600s daemon / `sync_check.log` model removed; refilled with the operator-invoked / no-daemon / doctor+banner shape. Corrected two facts: `FIELD_MAX_CHARS` is 2000 (was "200 characters"); Book 00 bodies now full-mirror-sync (the old §00-05.13 "never touches `docs/00` content" / "one-time copy at bootstrap" claim is superseded — index-only reconcile is for non-Book-00 entries). Refreshed §00-05.5 to the eight real escalation kinds (dropped `upstream_deprecation` / `upstream_removal` / `upstream_sha_drift`; added the `malformed_upstream` auto-promotion re-label) and the two-part `bulk_change` formula (`changed > 10` OR `changed >= 3` AND `changed > 0.20 × inherited`), and to the `SYNCED_FIELDS_FULL` / `SLOT` field classes. No top-level section renumbered; all six `#c4-*` heading anchors preserved. v1 plan pointers → v2 / `arc_sync.py`. See `versions/v2/implementation/phase_3d.md`. |
+| 2026-06-14 | Revision 13: phase 4b — `RUN_FIRST.sh` + mirror-class `.claude`/`ulid` deliveries. §00-05.3.1 component table: the `arc-100-librarian`, `likec4-author`, `sync-arc-100`, and `resolve-arc-100-issues` templates are now **delivered mirror-class** to `.claude/agents/` and `.claude/commands/` (a re-sync refreshes them, with backup), and the `tools/ulid.py` row notes its mirror-class downstream path `assets/arc100/tools/ulid.py`. §00-05.8 Distribution: the first-run command is now the name-first `RUN_FIRST.sh <NAME>` (which builds the named `<NAME>-100/` instance folder, writes its config + `config.json`, runs the underlying `arc_sync.py --target <NAME>-100`, and substitutes the seed tokens), with re-syncs calling `arc_sync.py --target .` from inside the instance; the payload tree gains a `RUN_FIRST.sh`-at-payload-root bullet and folds the `.claude/` agents+commands and `assets/arc100/tools/ulid.py` into the mirror-class list. No section renumbered; all `#c4-*` anchors preserved. See `versions/v2/implementation/phase_4b.md`. |

@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+#
+# RUN_FIRST.sh — name-first onboarding for an ARC-100 documentation system.
+#
+# Capture the system NAME before anything is built, so every name-dependent
+# surface (working-index filename, <NAME>-INDEX-* markers, rendered home title,
+# seed config) is correct from the first run — no placeholders to fix later.
+#
+#   prompt for a moniker (e.g. CS)  ->  normalize to <NAME>-100 (e.g. CS-100)
+#   mkdir <NAME>-100/               ->  write its ARC-100-SYNC.config.yml + config.json
+#   run arc_sync.py --target <NAME>-100  (bootstrap: Book 00 + working index + .claude + ulid)
+#   substitute the residual <PROJECT>* seed tokens in the just-seeded files
+#
+# arc_sync.py is unchanged — it derives the index filename, the markers, and the
+# home title from project_name. RUN_FIRST owns only the folder, the JSON asset,
+# and the seed-token substitution.
+#
+# Robustness: the payload is validated (arc_sync.py present AND a real mirror/ tree
+# under the effective --source) BEFORE any folder is created, so running this from
+# a non-payload location (e.g. the bare repo scripts/ dir) fails fast with guidance
+# instead of half-building. If a later step fails anyway, a <NAME>-100/ THIS run
+# created is rolled back rather than left as wreckage.
+#
+# GATE: security-critical. The operator name is shape-validated here (the PRIMARY
+# control) BEFORE any folder/file is created, and arc_sync.py re-gates the same
+# value (re.fullmatch). Operator input reaches files via env -> python / printf
+# of an already-charset-constrained value — never via sed/shell interpolation.
+#
+# Run from the distribution clone:  bash <clone>/RUN_FIRST.sh [NAME] [arc_sync flags…]
+#   NAME              first positional, or one interactive read (default: PROJECT-100)
+#   [arc_sync flags]  passed through to arc_sync.py (e.g. --source <staging>, --dry-run)
+
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# Locate arc_sync.py in either layout: payload/clone (tools/ sibling) or the
+# canonical source repo (scripts/ sibling, where RUN_FIRST.sh lives pre-release).
+ARC_SYNC="${HERE}/tools/arc_sync.py"
+[ -f "${ARC_SYNC}" ] || ARC_SYNC="${HERE}/arc_sync.py"
+
+# The name is the first positional; remaining args pass through to arc_sync.py.
+raw="${1:-}"
+if [ "$#" -ge 1 ]; then shift; fi
+
+# RUN_FIRST OWNS --target (the <NAME>-100/ folder it creates) and --config; a
+# pass-through must not redirect them onto a tree whose config + config.json it
+# never wrote. arc_sync re-gates both, but the named primary control should not
+# hand a caller the steering wheel. --source / --dry-run pass through freely.
+for arg in "$@"; do
+  case "${arg}" in
+    --target|--target=*|--config|--config=*)
+      echo "ERROR: ${arg%%=*} is managed by RUN_FIRST and cannot be overridden." >&2
+      exit 2 ;;
+  esac
+done
+
+# Fail fast: this script bootstraps from a PAYLOAD — a tree with a mirror/ subdir
+# (Book 00 + assets) and arc_sync.py. RUN_FIRST defaults --source to its own dir
+# (HERE); a pass-through --source overrides it (argparse takes the last value).
+# Resolve the EFFECTIVE source and verify the payload BEFORE creating anything, so
+# running from a non-payload location (e.g. the bare repo scripts/ dir, which has
+# no mirror/) errors cleanly instead of half-building a <NAME>-100/.
+SOURCE="${HERE}"
+prev=""
+for arg in "$@"; do
+  [ "${prev}" = "--source" ] && SOURCE="${arg}"
+  case "${arg}" in --source=*) SOURCE="${arg#--source=}" ;; esac
+  prev="${arg}"
+done
+if [ ! -f "${ARC_SYNC}" ] || [ ! -d "${SOURCE}/mirror" ]; then
+  echo "ERROR: no ARC-100 payload here (need arc_sync.py and a '${SOURCE}/mirror' tree)." >&2
+  echo "       Run RUN_FIRST.sh from a distribution clone or a staged payload — not the" >&2
+  echo "       bare repo. From the ARC-100 repo, stage a payload first:" >&2
+  echo "         out=\"\$(bash ARC-100-SYNC/scripts/release.sh --keep-staging)\"" >&2
+  echo "         staging=\"\$(printf '%s\\n' \"\$out\" | sed -n 's/.*Staging kept: //p')/payload\"" >&2
+  echo "         bash \"\$staging/RUN_FIRST.sh\" <NAME>" >&2
+  exit 2
+fi
+
+[ -n "${raw}" ] || read -rp 'Name your documentation system (e.g. CS; "-100" is appended): ' raw || true
+# Trim surrounding whitespace.
+raw="$(printf '%s' "${raw}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+if [ -z "${raw}" ]; then
+  # Truly empty / declined input -> friendly default (re-runnable to rename).
+  name="PROJECT-100"
+  echo "No name given — defaulting to PROJECT-100 (re-run to rename)."
+else
+  # Strip a trailing band marker [sep]{0,3}100 (CS-100 / CS100 / CS 100 / CS_100
+  # / CS - 100 / C100 all -> base), then re-append -100. A trailing 100 is ALWAYS
+  # the band marker; a value that is ONLY the marker (e.g. "100") has no name.
+  base="$(printf '%s' "${raw}" | sed -E 's/[[:space:]_-]{0,3}100[[:space:]]*$//; s/[[:space:]]+$//')"
+  if [ -z "${base}" ]; then
+    echo "ERROR: '${raw}' has no project name before the -100 band marker." >&2
+    exit 2
+  fi
+  name="${base}-100"
+fi
+
+# Validate: single line AND charset — equivalent to arc_sync.py L147 re.fullmatch
+# (which a multi-line value would fail; grep -qx alone would accept it line-wise).
+# Reject BEFORE creating anything — never leave a folder for a bad name.
+if [ "${name}" != "${name%%$'\n'*}" ] \
+   || ! printf '%s' "${name}" | grep -qxE '[A-Za-z0-9][A-Za-z0-9._-]*'; then
+  echo "ERROR: '${raw}' does not yield a valid system name (letters/digits/._- only, single segment)." >&2
+  exit 2
+fi
+
+# Roll back a <NAME>-100/ THIS run creates if any later step fails (set -e or a
+# signal). Only a folder we created is removed — never a pre-existing one. ${name}
+# passed the strict shape gate above (single segment, [A-Za-z0-9._-]), so the rm
+# target is a direct child of CWD with no traversal.
+created=""
+[ -e "${name}" ] || created="${name}"
+roll_back() {
+  status=$?
+  if [ "${status}" -ne 0 ] && [ -n "${created}" ] && [ -d "${created}" ]; then
+    rm -rf -- "${created}"
+    echo "Rolled back partially-created ${created}/ after failure (exit ${status})." >&2
+  fi
+}
+trap roll_back EXIT
+
+mkdir -p "${name}"
+# project_name is the only required key; the value passed the strict gate above
+# (no YAML metacharacters possible), so a printf write is injection-safe.
+printf 'project_name: %s\n' "${name}" > "${name}/ARC-100-SYNC.config.yml"
+# config.json — the readable name asset for downstream scripts/agents. Built by
+# json.dump from an env var (never string-built).
+NAME="${name}" python3 - "${name}/config.json" <<'PY'
+import json, os, sys
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump({"documentation_system_name": os.environ["NAME"]}, fh, indent=2)
+    fh.write("\n")
+PY
+
+# Bootstrap: Book 00 -> <NAME>-100/docs/00/, working index seeded + correctly
+# named, .claude/ + ulid.py delivered. "$@" passes through (e.g. --source).
+python3 "${ARC_SYNC}" --source "${HERE}" --target "${name}" "$@"
+
+# Substitute the residual <PROJECT>* seed tokens in the just-seeded files so the
+# adopter never sees a placeholder. Ordered, bounded token list; one pass/file.
+# (likec4 fence project= must equal likec4.config.json "name" -> both become the
+# system name, which likec4 accepts as a project id.)
+NAME="${name}" python3 - "${name}" <<'PY'
+import os, sys
+from pathlib import Path
+
+name = os.environ["NAME"]
+root = Path(sys.argv[1])
+# Composites first so the bare <PROJECT> rule never double-appends -100.
+subs = [
+    ("<PROJECT> Project", name),          # mkdocs site_name -> bare system name
+    ("<PROJECT_DESC>", f"{name} documentation"),
+    ("<PROJECT_SLUG>", name),             # likec4 fence project= matches the config "name"
+    ("<PROJECT>-100", name),              # -100 composites (template.c4, package.json, index.md, prose)
+    ("<PROJECT>", name),                  # remaining standalone (site-<PROJECT>, likec4 "name", title, comment)
+]
+targets = [
+    "mkdocs.yml",
+    "docs/00/architectural-model.md",
+    "docs/00/model/likec4.config.json",
+    "docs/00/model/index.md",
+    "architecture/LikeC4/package.json",
+    "architecture/LikeC4/template.c4",
+]
+for rel in targets:
+    p = root / rel
+    if not p.is_file():
+        continue          # a seed file may legitimately be absent for this target
+    text = p.read_text(encoding="utf-8")
+    for old, new in subs:
+        text = text.replace(old, new)
+    p.write_text(text, encoding="utf-8")
+PY
+
+echo "Built ${name}/ — run mkdocs from inside it; /sync-arc-100 keeps it current."
