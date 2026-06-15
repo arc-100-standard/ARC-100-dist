@@ -138,10 +138,11 @@ PY
 # named, .claude/ + ulid.py delivered. "$@" passes through (e.g. --source).
 python3 "${ARC_SYNC}" --source "${HERE}" --target "${name}" "$@"
 
-# Substitute the residual <PROJECT>* seed tokens in the just-seeded files so the
-# adopter never sees a placeholder. Ordered, bounded token list; one pass/file.
-# (likec4 fence project= must equal likec4.config.json "name" -> both become the
-# system name, which likec4 accepts as a project id.)
+# Substitute the residual <PROJECT>* seed tokens in the just-seeded files, and
+# the <NAME> placeholder in the seeded working index, so the adopter never sees a
+# placeholder. Ordered, bounded token list; one pass/file. (likec4 fence project=
+# must equal likec4.config.json "name" -> both become the system name, which
+# likec4 accepts as a project id.)
 NAME="${name}" python3 - "${name}" <<'PY'
 import os, sys
 from pathlib import Path
@@ -172,6 +173,43 @@ for rel in targets:
     for old, new in subs:
         text = text.replace(old, new)
     p.write_text(text, encoding="utf-8")
+
+# Working index: fill ONLY the Book 01 placeholder title "<NAME> System".
+# Do NOT run the <PROJECT> subs here — Book 00 entry descriptions carry generic
+# "<PROJECT>-100" prose (the standard's own text, exempted by arc_sync's malformed
+# gate) that must stay verbatim; rewriting it would both corrupt the content and
+# make every such entry diverge from BASE (a mass refresh escalation). Filling
+# <NAME> is refresh-safe: Book 01 syncs slot identity only (id/band/ulid), so
+# arc_sync never compares — or reverts — the title on a later refresh.
+wi = root / f"docs/01/01-01_{name}_Index.md"
+if wi.is_file():
+    wi.write_text(wi.read_text(encoding="utf-8").replace("<NAME>", name), encoding="utf-8")
 PY
 
-echo "Built ${name}/ — run mkdocs from inside it; /sync-arc-100 keeps it current."
+# Install succeeded. Disarm the rollback trap so the post-success helper below
+# (port scan + recommendation) can never roll back a fully-built instance.
+trap - EXIT
+
+# Recommend a ready-to-run preview command: the instance config, livereload, the
+# first free port at/above 8000, and -o (mkdocs opens the browser on serve).
+port="$(python3 - <<'PY'
+import socket
+chosen = 8000
+for p in range(8000, 9000):
+    s = socket.socket()
+    try:
+        s.bind(("127.0.0.1", p)); chosen = p; s.close(); break
+    except OSError:
+        s.close()
+print(chosen)
+PY
+)" || port=8000
+[ -n "${port}" ] || port=8000
+
+echo ""
+echo "Built ${name}/ — your ARC-100 documentation system."
+echo ""
+echo "Preview it (opens your browser):"
+echo "  mkdocs serve -f ${name}/mkdocs.yml --livereload --dev-addr localhost:${port} -o"
+echo ""
+echo "/sync-arc-100 keeps it current."
