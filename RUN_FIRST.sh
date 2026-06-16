@@ -209,8 +209,97 @@ PY
 echo ""
 echo "Built ${name}/ — your ARC-100 documentation system."
 echo ""
-echo "Preview it (opens your browser):"
-echo "  mkdocs serve -f ${name}/mkdocs.yml --livereload --dev-addr localhost:${port} -o"
+
+# The plain preview command — shown when the VS Code task offer is declined or
+# there is no .vscode/ workspace.
+recommend_cmd() {
+  echo "Preview it (opens your browser):"
+  echo "  mkdocs serve -f ${name}/mkdocs.yml --livereload --dev-addr localhost:${port} -o"
+}
+
+# Opt-in VS Code task wiring. A task is the easiest way to start the site, so
+# offer it first — but ONLY in an interactive terminal with a .vscode/ workspace
+# folder in the CWD (the VS Code workspace root, parent of the instance). The
+# helper builds the task JSON from the gated name + scanned port via json.dump
+# (no shell/JSON injection), backs up an existing tasks.json before editing, and
+# falls back to printing a paste-ready snippet rather than risk corrupting it.
+if [ -t 0 ] && [ -d ".vscode" ]; then
+  ans=""
+  read -rp "Would you like to create a task in Visual Studio Code's .vscode/tasks.json to start the mkdocs server hosting your ${name} site? [y/N] " ans || true
+  case "${ans}" in
+    [Yy] | [Yy][Ee][Ss])
+      if NAME="${name}" PORT="${port}" python3 - <<'PY'
+import json, os, re, shutil, sys
+
+name = os.environ["NAME"]
+port = os.environ["PORT"]
+path = os.path.join(".vscode", "tasks.json")
+label = f"Docs: MkDocs serve ({name} @ {port})"
+task = {
+    "label": label,
+    "type": "shell",
+    "command": "mkdocs",
+    "args": ["serve", "-f", f"{name}/mkdocs.yml", "--livereload",
+             "--dev-addr", f"localhost:{port}"],
+    "options": {"cwd": "${workspaceFolder}"},
+    "isBackground": True,
+    "group": "build",
+}
+RUN_DEFAULT = ("Start it with Cmd-Shift-B (Run Build Task) — VS Code's built-in\n"
+               "shortcut. (If Cmd-Shift-B is remapped: Cmd-Shift-P -> "
+               "'Tasks: Run Task' -> the label.)")
+RUN_PICK = ("Start it with Cmd-Shift-P -> 'Tasks: Run Task' -> the new label\n"
+            "(Cmd-Shift-B runs your existing default build task).")
+
+# No tasks.json yet -> create one. The new task is the only build task, so
+# Cmd-Shift-B runs it directly.
+if not os.path.exists(path):
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"version": "2.0.0", "tasks": [task]}, fh, indent=4)
+        fh.write("\n")
+    print(f'Created .vscode/tasks.json with task "{label}".')
+    print(RUN_DEFAULT)
+    sys.exit(0)
+
+text = open(path, encoding="utf-8").read()
+# Already wired for this instance? Cheap substring test, no JSON parse.
+if f'"{name}/mkdocs.yml"' in text:
+    print(f'A VS Code task for {name} already exists in .vscode/tasks.json — left as is.')
+    print(RUN_PICK)
+    sys.exit(0)
+
+# Insert into the existing "tasks": [ ... ] array by text edit so JSONC comments
+# and formatting survive. Back up first; if the array can't be found, print the
+# snippet instead of risking a corrupt file.
+m = re.search(r'"tasks"\s*:\s*\[', text)
+if not m:
+    print('Could not locate the "tasks" array — paste this into .vscode/tasks.json:')
+    print(json.dumps(task, indent=2))
+    print(RUN_PICK)
+    sys.exit(0)
+shutil.copy2(path, path + ".bak")
+indented = "\n".join("        " + ln for ln in json.dumps(task, indent=4).splitlines())
+empty = re.match(r"\s*\]", text[m.end():]) is not None
+text = text[:m.end()] + "\n" + indented + ("" if empty else ",") + text[m.end():]
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+print(f'Added a task to .vscode/tasks.json (original backed up to tasks.json.bak): "{label}".')
+print(RUN_PICK)
+PY
+      then :
+      else
+        echo "(Could not write the VS Code task — use the command instead.)"
+        recommend_cmd
+      fi
+      ;;
+    *)
+      recommend_cmd
+      ;;
+  esac
+else
+  recommend_cmd
+fi
+
 echo ""
 echo "Updates are on demand — nothing syncs in the background. Pull upstream"
 echo "changes anytime by re-running the clone-and-run, or /sync-arc-100 in Claude Code."
