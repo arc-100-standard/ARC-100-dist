@@ -301,5 +301,8 @@ else
 fi
 
 echo ""
+echo "Open ${name}/ as your editor workspace — that is where /sync-arc-100 and the"
+echo "arc-100-librarian / likec4-author agents live (in ${name}/.claude/)."
+echo ""
 echo "Updates are on demand — nothing syncs in the background. Pull upstream"
 echo "changes anytime by re-running the clone-and-run, or /sync-arc-100 in Claude Code."

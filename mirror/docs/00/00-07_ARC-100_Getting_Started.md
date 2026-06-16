@@ -4,85 +4,56 @@ arc_100_id: "00-07"
 status: active
 keywords: [getting-started, clone, onboarding, adopt, downstream, sync, likec4, agents]
 agent_summary: |
-  The single a-priori onboarding chapter for adopting ARC-100 in a
-  project. Covers what ARC-100 and a `<PROJECT>-100` instance are, how to
-  clone the public ARC-100 mirror and run the name-first onboarding script
-  (prerequisites, the depth-1 clone, `RUN_FIRST.sh <NAME>` — which creates
-  the named `<NAME>-100/` instance folder and runs
-  `arc_sync.py --target <NAME>-100`), the first sync and keeping
-  the standard current, where a project's own books and chapters go, the
-  two Claude Code agents (arc-100-librarian, likec4-author), removal, and
-  troubleshooting. It is deliberately concise: the depth lives in the
-  chapters it links to (00-00 numbering/lifecycle, 00-05 synchronization,
-  00-06 architectural modeling), which a reader of the rendered site can
-  open directly.
+  The concise getting-started chapter for adopting ARC-100: clone the public
+  mirror, run RUN_FIRST.sh to stand up a named <NAME>-100/ instance, install
+  deps, preview the site, and keep it current with the on-demand /sync-arc-100.
+  Also covers where your own books/chapters go, the two Claude Code agents,
+  removal, troubleshooting, and current limitations. Deliberately thin — it
+  links the depth to 00-00 (numbering, bands, lifecycle, hard rules), 00-05 (the
+  sync model), and 00-06 (LikeC4) rather than restating them. Open your
+  <NAME>-100/ instance as your editor/Claude Code workspace so its bundled
+  /sync-arc-100 command and agents resolve.
 prerequisites: ["00-00_ARC-100_General.md"]
 companions: ["00-05_ARC-100_Synchronization.md", "00-06_ARC-100_Architectural_Modeling.md"]
 ---
 
 ## 00-07 ARC-100 Getting Started
 
-> **What this chapter is.** The one place to start when you want to give
-> some *other* software project a well-organized, machine-indexable
-> documentation tree using ARC-100. No prior ARC-100 experience is
-> assumed. By the end you will have cloned the public ARC-100 mirror, run
-> your first sync, resolved any index decisions it raised, and learned
-> where your own docs go and which agents write them.
->
-> **What this chapter is not.** A deep reference. It states the essentials
-> and links to the chapters that own the detail —
-> [00-00 General](00-00_ARC-100_General.md) (numbering, bands, lifecycle,
-> hard rules), [00-05 Synchronization](00-05_ARC-100_Synchronization.md)
-> (the sync-and-rectify model), and
+> **Start here to put ARC-100 on a project.** By the end you will have a
+> running `<NAME>-100/` documentation instance — cloned, synced, previewing in
+> your browser, with your own books ready to fill. This chapter is deliberately
+> thin: it gives the steps and the few things you must decide, and links the
+> depth to [00-00 General](00-00_ARC-100_General.md) (numbering, bands,
+> lifecycle, hard rules), [00-05 Synchronization](00-05_ARC-100_Synchronization.md)
+> (how the sync works), and
 > [00-06 Architectural Modeling](00-06_ARC-100_Architectural_Modeling.md)
-> (LikeC4). Open those for anything this chapter summarises.
+> (LikeC4). New to ARC-100? Read [00-00](00-00_ARC-100_General.md) first.
 
-### 00-07.1 — What ARC-100 is, and what a `<PROJECT>-100` is
+### 00-07.1 — Your `<NAME>-100` instance
 
-**ARC-100** is two things working together:
+Adopting ARC-100 means creating **your own named instance** — `CS-100`,
+`ACME-100`, `FLOW-100`. It *inherits* the Book 00 standard chapters (kept fresh
+by the sync) and *adds* your own books in the slots the standard reserves for
+you (§00-07.5). The onboarding script (§00-07.2) builds it as a self-contained
+folder, `<NAME>-100/`:
 
-1. **A documentation-indexing standard** — a fixed, numbered chapter
-   scheme (books and chapters grouped into seven topic *bands*), a
-   machine-parseable master index, an immutable-ULID identity model, and
-   conventions for embedding C4 architecture diagrams. The standard ships
-   as the "Book 00" chapters (`00-00`…`00-07`). See
-   [00-00 General](00-00_ARC-100_General.md) for the full specification
-   and [00-02 Glossary](00-02_ARC-100_Glossary.md) for vocabulary.
-2. **A sync toolkit (ARC-100-SYNC)** — published as a **public git mirror**
-   you clone, carrying the sync tool (`tools/arc_sync.py`), the Book 00
-   content, the Claude Code agent and slash-command templates, and a
-   LikeC4 modeling toolchain. Running it lands the standard in your repo
-   and keeps it in step with upstream as the standard evolves
-   ([00-05 Synchronization](00-05_ARC-100_Synchronization.md)).
-
-When you adopt ARC-100 you create **your project's own instance**, named
-`<PROJECT>-100` — e.g. `FLOW-100`, `CS-100`, `ACME-100`. Your instance
-*inherits* the Book 00 chapters verbatim (kept fresh by the sync tool) and
-*adds* your own books and chapters in the slots the standard reserves for
-you (§00-07.5). The onboarding script (§00-07.2) builds that instance in a
-folder **named for it** — `<PROJECT>-100/` — so the `docs/00/`, `docs/01/`,
-`.arc100/`, and `.claude/` paths in the table below are all rooted at that
-folder, not at a bare repo root.
-
-ARC-100 keeps **two indexes**, and the distinction matters from day one
-(00-00 §00-00.10.1):
-
-| Thing | Where it lands | Who owns it |
+| Inside `<NAME>-100/` | What it is | Who maintains it |
 | --- | --- | --- |
-| The Book 00 standard chapters | `docs/00/00-00…00-07_*.md` | Upstream (synced; do not hand-edit) |
-| The mirrored ARC-100 index | `docs/00/00-01_ARC-100_Standard_Inventory.md` | Upstream (synced read-only reference, like every Book 00 chapter) |
-| Your **working index** (chapter 01-01) | `docs/01/01-01_<PROJECT>-100_Index.md` | The librarian agent only — your single mkdocs site renders from this |
-| Your project chapters | `docs/01/`, `docs/02/`, `docs/10/`, … | You |
-| LikeC4 architecture model | `architecture/LikeC4/<project>.c4` | You (via `likec4-author`) |
-| The two agents + two slash commands | `.claude/agents/`, `.claude/commands/` | Delivered by the sync |
+| `docs/00/` | Book 00 standard chapters + the mirrored ARC-100 index | Upstream — synced, read-only ([00-00 §00-00.11](00-00_ARC-100_General.md)) |
+| `docs/01/01-01_<NAME>-100_Index.md` | **Your working index** — the one your site renders from | The `arc-100-librarian` agent |
+| `docs/01/`, `docs/02/`, … | Your own books and chapters | You |
+| `.claude/`, `assets/`, `_hooks/`, `mkdocs.yml` | Agents + commands, theme assets, the build hook, site config | Synced (some seed-class — §00-07.3) |
 
-> **Whose rule is "do not hand-edit"?** This table describes *your*
-> downstream `<PROJECT>-100`: there, Book 00 — including the mirrored
-> ARC-100 index at `docs/00/00-01_…` — is a synced, **read-only mirror**,
-> so the sync tool, not you, maintains it. Your own **working index** at
-> `docs/01/01-01_…` is the one the librarian curates. Inside the ARC-100
-> standard's *own* repository, Book 00 is the source of record and is
-> authored directly. See the hard rule in 00-00 §00-00.11.
+> **Open `<NAME>-100/` as your editor / Claude Code workspace.** It is a
+> complete project. Claude Code discovers slash commands and agents from the
+> *workspace root's* `.claude/`, so `/sync-arc-100` and the `arc-100-librarian` /
+> `likec4-author` agents are available only when the **instance** — not its
+> parent folder — is the open workspace.
+
+ARC-100 keeps two indexes: the upstream inventory at `docs/00/00-01_…`
+(read-only) and *your* working index at `docs/01/01-01_…` — only the latter
+renders your site. The full two-index model is
+[00-00 §00-00.10.1](00-00_ARC-100_General.md).
 
 ### 00-07.2 — Clone the mirror and run the onboarding script
 
@@ -110,49 +81,23 @@ discards the clone once it has run — so the block is safe to re-run (it never
 trips over a leftover) and leaves nothing behind. The clone is only a
 delivery vehicle; nothing of yours lives in it.
 
-`RUN_FIRST.sh` is **name-first onboarding**: the one input it needs is your
-system's name — passed as the single argument, or prompted for
-interactively if you omit it. From that one input it does everything else
-in a single pass:
+Give `RUN_FIRST.sh` your system's name — at the prompt, or as one argument
+(`ACME` → `ACME-100`). From that one input it does everything in a single pass:
+creates the `<NAME>-100/` folder, writes its config (`project_name` is the only
+key) and a `config.json` name asset, runs the bootstrap (`arc_sync.py` — Book 00,
+your working index, the agents, the ULID minter), and fills in every
+name-dependent placeholder, **so nothing is left to hand-fix.** It manages
+`--target`/`--config` itself (passing either is refused); only `--source` and
+`--dry-run` reach `arc_sync.py`. The name must be a single path segment
+(letters/digits/`._-`); a bad one is rejected before anything is created
+(§00-07.8).
 
-1. **Normalises the name to `<NAME>-100`** (`ACME` → `ACME-100`; a trailing
-   `-100`, `100`, or `_100` you type is folded, never doubled).
-2. **Creates the `<NAME>-100/` folder** in the current directory. Your
-   instance is *proudly called what it is* — `ACME-100/` — not an anonymous
-   `docs/` tree at a repo root.
-3. **Writes the config for you** — `<NAME>-100/ARC-100-SYNC.config.yml`
-   with `project_name` already set, plus `<NAME>-100/config.json`, a
-   readable name asset (`{"documentation_system_name": "<NAME>-100"}`) your
-   own scripts and agents can read.
-4. **Runs `arc_sync.py --target <NAME>-100`** — the bootstrap that delivers
-   Book 00, seeds your chapter 01-01 working index, and lands the agents
-   and the ULID minter (§00-07.3).
-5. **Substitutes the residual `<PROJECT>` seed tokens** in the just-seeded
-   files, so **no placeholder is left to hand-fix**: the rendered home
-   title, the working-index filename, the on-disk `<NAME>-100-INDEX-*`
-   markers, and the LikeC4 project id are all correct from the first build.
-
-The clone is a throwaway delivery vehicle, not part of your instance.
-`RUN_FIRST.sh` **owns** `--target` and `--config` — it manages the
-`<NAME>-100/` folder and the config inside it, so passing either is refused
-(exit `2`); only `--source` (defaulted to the clone root) and `--dry-run`
-pass through to `arc_sync.py`.
-
-> **You no longer hand-author the config.** `RUN_FIRST.sh` writes
-> `ARC-100-SYNC.config.yml` with `project_name` set. `project_name` is the
-> only required key — a single path segment (letters, digits, `._-`; no
-> `/`, no whitespace, no leading dot), because it fuses into your derived
-> index filename; `RUN_FIRST.sh` validates the name to exactly that shape
-> before creating anything. `local_index_path` is **optional** and
-> convention-derives to `docs/01/01-01_<project_name>_Index.md`; edit the
-> generated config to override it only if you must.
-
-**The exit-code contract.** `RUN_FIRST.sh` surfaces `arc_sync.py`'s exit
-code: `0` (success — bootstrap done), `1` (human action required — it wrote
-`.arc100/PENDING-INDEX-DECISIONS.yml`; see §00-07.4), or `2` (error — a
-bad name, bad config or payload, or a path-containment violation; the
-stderr text says which). The tool does no network work of its own, so exit
-`2` is never a network failure.
+**Exit codes.** The first run bootstraps, so it exits `0` (done) or `2`
+(error — bad name, bad config or payload, or a path-containment violation;
+stderr says which). The `1` (index decisions pending — it wrote
+`.arc100/PENDING-INDEX-DECISIONS.yml`) only arises on a later re-sync
+(§00-07.4). No network runs after the clone, so exit `2` is never a network
+failure.
 
 > **You are running upstream code.** Cloning and running `RUN_FIRST.sh` (and
 > the `arc_sync.py` it calls) means executing upstream-delivered code on
@@ -164,189 +109,110 @@ stderr text says which). The tool does no network work of its own, so exit
 > notes. See [00-05 §00-05.11](00-05_ARC-100_Synchronization.md) for the
 > full posture.
 
-### 00-07.3 — After the sync: what landed, and what you finish
+### 00-07.3 — After the bootstrap: deps and a first preview
 
-The onboarding script delivers most of the setup for you, all inside your
-`<NAME>-100/` instance folder. Files split into two classes
-([00-05 §00-05.5](00-05_ARC-100_Synchronization.md)):
+Almost everything is delivered and kept fresh by re-sync (**mirror-class** —
+Book 00, the hook, assets, the agents; don't hand-edit, a local edit is backed
+up before overwrite). A few files are yours (**seed-class** — written only if
+absent, so your edits survive a re-sync), and `RUN_FIRST.sh` has already filled
+their name placeholders. The file-class model is
+[00-05 §00-05.5](00-05_ARC-100_Synchronization.md); in practice the only
+seed-class edit you may want is tuning `mkdocs.yml`'s `not_in_nav` globs to your
+book numbers.
 
-- **Mirror-class — delivered automatically, do not hand-edit.** The Book
-  00 chapters and the mirrored ARC-100 index land under
-  `<NAME>-100/docs/00/`; the master-index hook at
-  `<NAME>-100/_hooks/arc100_master_index.py`; the home-page assets, Inter
-  fonts, and the ULID minter (`assets/arc100/tools/ulid.py`) under
-  `<NAME>-100/assets/arc100/`; the two agents and two slash commands under
-  `<NAME>-100/.claude/`. A re-sync refreshes these; a local edit is backed
-  up to `.arc100/backups/` before being overwritten.
-- **Seed-class — delivered copy-if-absent, then yours to edit.** These are
-  written only if not already present, so your edits survive a re-sync —
-  and `RUN_FIRST.sh` has already substituted the name-dependent `<PROJECT>`
-  tokens in them, so **no placeholder is left to fix**:
-  1. **Sync config** — `ARC-100-SYNC.config.yml`, written for you with
-     `project_name` set (§00-07.2).
-  2. **Site config** — `mkdocs.yml`, already carrying your name
-     (`site_name: <NAME>-100`; the home renders as `"<NAME>-100 Index"`);
-     the only edit left is tuning the `not_in_nav` globs to your book
-     numbers.
-  3. **Standalone Architectural-Model page** — its `<NAME>-100` title and
-     `project=<slug>` fence argument are filled in already (relevant only
-     if you author a model).
-  4. **LikeC4 placeholders** — the `name` field in
-     `architecture/LikeC4/package.json` and
-     `docs/00/model/likec4.config.json` is already your project slug; if
-     you author a model, just verify with
-     `architecture/LikeC4/bin/likec4 --version` and `… validate`
-     (§00-07.6).
-
-**Python deps.** `requirements.txt` is seeded; the **doctor** prints the
-exact command after each sync — run what it printed:
+**Install build deps.** `requirements.txt` is seeded; run the exact command the
+**doctor** printed after the sync —
 `python3 -m pip install --user --require-hashes -r requirements.txt` (the
-`--require-hashes` flag is non-negotiable). The doctor never runs pip for
-you; a missing Node or LikeC4 toolchain is likewise a printed suggestion,
-never a gate ([00-05 §00-05.8.1](00-05_ARC-100_Synchronization.md)).
+`--require-hashes` flag is non-negotiable). The doctor only prints; it never
+installs anything itself ([00-05 §00-05.8.1](00-05_ARC-100_Synchronization.md)).
 
-**Preview your site.** Once the build deps are installed, serve or build the
-site with `-f` pointed at the instance config (run from the folder's
-parent). `RUN_FIRST.sh` prints this exact command on completion with your
-name and a free port already filled in:
+**Preview.** `RUN_FIRST.sh` prints this command with your name and a free port
+already filled in:
 
 ```bash
 mkdocs serve -f <NAME>-100/mkdocs.yml --livereload --dev-addr localhost:<PORT> -o
 mkdocs build -f <NAME>-100/mkdocs.yml      # static site -> <NAME>-100/site-<NAME>-100/
 ```
 
-The **`-o`** opens the rendered site in your default browser once the build
-finishes (drop it to skip). `--livereload` rebuilds on every save. Your home
-page is the **generated index** (titled `<NAME>-100 Index`), which links to
-every chapter — the site has no hand-maintained sidebar, so the `mkdocs`
-"pages … not included in the nav configuration" notes are **expected, not
-errors**. (For a CI gate use `mkdocs build --strict`, which turns warnings
-into failures; a fresh instance is strict-clean apart from the inherited
-Book 00 architecture views, whose `project=arc-100` LikeC4 diagrams resolve
-only on the standard's own site — see
-[00-06](00-06_ARC-100_Architectural_Modeling.md).)
+`-o` opens the browser. The home page is the generated index, which links every
+chapter — there is no hand-maintained sidebar, so mkdocs's "not included in the
+nav" notes are **expected, not errors.** A fresh instance is `--strict`-clean
+except the inherited Book 00 architecture views (their `project=arc-100` LikeC4
+diagrams resolve only on the standard's own site —
+[00-06](00-06_ARC-100_Architectural_Modeling.md)).
 
-### 00-07.4 — First sync, and keeping ARC-100 updated
+### 00-07.4 — Keeping current
 
-Your **first** run is `RUN_FIRST.sh` (§00-07.2) — it builds and bootstraps
-the `<NAME>-100/` instance. After that, keep current with `/sync-arc-100`
-**run from inside your `<NAME>-100/` folder** (it wraps the clone + the
-`arc_sync.py --target .` call, where `--target .` is the instance root);
-re-syncs do not go back through `RUN_FIRST.sh`, which is first-run only. The
-tool auto-detects its mode:
+Your first run is `RUN_FIRST.sh`. After that, **updating is on-demand —
+nothing syncs in the background** (a sync can raise index decisions that need
+you, so it stays human-in-the-loop, not a daemon). Pull updates whenever you
+choose, two equivalent ways:
 
-- **Bootstrap** (no `.arc100/state.yml` yet, index unseeded): seeds your
-  working index from the upstream entries, records the `BASE` snapshot,
-  and exits `0` — no decisions.
-- **Refresh** (`.arc100/state.yml` present): syncs the payload and folds
-  the upstream index into your working index by a 3-way ULID reconcile
-  (so a renumber reads as a move, not a delete-plus-add), auto-applying
-  the safe changes and escalating the judgment-bound ones.
+- **`/sync-arc-100`** — the Claude Code slash command bundled in your instance
+  (`.claude/commands/`), available when `<NAME>-100/` is your open workspace
+  (§00-07.1).
+- **The clone-and-run block** from §00-07.2, run again.
 
-**Exit codes:** `0` clean · `1` index decisions pending · `2` hard error.
-On **`1`**, the tool wrote `.arc100/PENDING-INDEX-DECISIONS.yml` and
-applied **nothing**. Fill in each block's `decision:` (`accept` or
-`reject`) — the **arc-100-librarian** can do this for you via
-`/resolve-arc-100-issues` (§00-07.6) — then **re-run the sync**: the
-answered decisions apply on that next run, which also archives the
-decision file. There is no separate command that "applies" the decisions;
-re-running the sync is the applier. The classification tables and the
-reconcile contract live in
-[00-05 §00-05.4](00-05_ARC-100_Synchronization.md)–[§00-05.5](00-05_ARC-100_Synchronization.md);
-the banner and resolution flow are in
-[§00-05.6](00-05_ARC-100_Synchronization.md).
+Either re-clones the mirror and runs `arc_sync.py` against your instance; it
+re-syncs (you do not re-run `RUN_FIRST.sh`, which is first-run only).
 
-**Keeping current.** There is no installer to re-run, and **nothing syncs in
-the background** — updating is deliberate and on-demand. (A sync can raise
-judgment-bound index decisions, so it stays human-in-the-loop by design, not a
-daemon or cron job.) Pull updates whenever you choose: re-run the
-clone-and-run block from §00-07.2, or — inside Claude Code — the
-`/sync-arc-100` slash command (it is not a filesystem path; it lives at
-`.claude/commands/sync-arc-100.md` and wraps the same clone-and-run). Content
-updates arrive
-continuously: every upstream `main` commit republishes chapter bodies,
-tooling, and descriptions, while the ARC-100 **index version** (`vN`)
-changes only when chapters are added or removed upstream — the two-axis
-model in [00-05 §00-05.9](00-05_ARC-100_Synchronization.md). Discipline:
+**When a sync needs you (exit `1`).** The reconcile folds upstream index
+changes into your working index (a renumber reads as a move, not
+delete-plus-add), auto-applies the safe ones, and **escalates the
+judgment-bound ones** to `.arc100/PENDING-INDEX-DECISIONS.yml` — applying
+*nothing* until you answer. Fill each block's `decision:` (`accept`/`reject`)
+— the `arc-100-librarian` can do this via `/resolve-arc-100-issues` (§00-07.6)
+— then **re-run the sync** to apply them. Re-running *is* the applier; there is
+no separate apply command. The classification rules, the two-axis (`vN`)
+version model, and the banner flow are in
+[00-05 §00-05.4–§00-05.9](00-05_ARC-100_Synchronization.md). Your own entries
+(`arc_100: false`) are never touched; a hand-edited mirror file is backed up
+to `.arc100/backups/` before any overwrite.
 
-- Mirror-class files (`docs/00/`, `_hooks/`, `assets/arc100/`) are
-  upstream-owned; a re-sync refreshes them. If you hand-edited one, the
-  tool backs your copy up to `.arc100/backups/<stamp>/` before
-  overwriting, and reports it — it never clobbers silently.
-- Seed-class files you own (`ARC-100-SYNC.config.yml`, `mkdocs.yml`, the
-  Architectural-Model page, the LikeC4 placeholders) are written only if
-  absent, so a re-sync leaves your edits intact.
-- Your working index at `docs/01/01-01_<PROJECT>-100_Index.md` is
-  reconciled, never blindly overwritten; project-authored entries
-  (`arc_100: false`) are off-limits to the sync entirely.
+### 00-07.5 — Where your own documentation goes
 
-### 00-07.5 — Where your `<PROJECT>-100` documentation goes
+Your books and chapters follow the standard's numbering
+(`<book>-<chapter>_<title>.md`, seven bands) — the full format and band table
+are [00-00 §00-00.7](00-00_ARC-100_General.md). Two rules you use constantly:
 
-Files follow `<book>-<chapter>_<title>.md` with two-digit zero-padded
-numbers (e.g. `40-50_Architecture_Reference.md`); section headings inside
-a chapter follow `### BB-CC.N — Title`; cite other chapters as
-`[BB-CC §N]`. Every book number falls into one of seven bands
-(Application, Governance, Client, Server, Data, Tooling, Operations) —
-the band table and the four structural rules are in
-[00-00 §00-00.7](00-00_ARC-100_General.md).
+- **Chapters in an inherited book:** the standard uses slots 01–49; **you take
+  50 upward.**
+- **New books in a band:** the standard allocates low; **you allocate high and
+  work down** (99, 98, …) — this minimises collisions when the standard adds a
+  book.
 
-The two rules you will use constantly:
+You never invent chapter numbers or ULIDs by hand: the `arc-100-librarian`
+(§00-07.6) allocates them and is the only writer of your working index. Your own
+book is Book 01; the librarian titles it **"`<NAME>-100 System`"** when it
+allocates it (mirroring the standard's Book 00 = "ARC-100 System").
 
-- **Chapters in an inherited (`arc_100: true`) book:** ARC-100 uses slots
-  01–49; **you allocate from 50 upward.**
-- **New project books in a band:** ARC-100 allocates from the low end;
-  **you allocate from the high end and work downward** (99, 98, …). This
-  minimises rebase collisions when the standard adds a book.
-
-Each index entry carries an immutable `arc_100_ulid` (the join key the
-sync tool matches on — never invent or edit one by hand) and a
-`status` (`placeholder` → `draft` → `active` → `superseded`/`deprecated`).
-Only the librarian (§00-07.6) writes the index or changes status. Your
-**working index** is chapter **01-01** at
-`docs/01/01-01_<PROJECT>-100_Index.md` — Book 01 is your project's own
-book, and your single site renders from this index, never from the
-mirrored ARC-100 inventory at `docs/00/00-01_…`. By convention the
-librarian titles that first own book **"`<NAME>-100 System`"** (e.g.
-"`CS-100 System`") when it allocates it — mirroring the standard's own
-Book 00 = "ARC-100 System".
-
-You do not migrate everything at once: bootstrap ARC-100 alongside your
-existing tree and bulk-migrate legacy docs as a single planned operation at
-version closeout ([00-00 §00-00.10](00-00_ARC-100_General.md)). When the
-bootstrap lands a mirror-class file on top of a pre-existing one, the tool
-moves the colliding copy aside to `.arc100/backups/<stamp>/` before
-writing — it never clobbers silently. Migration itself is the manual
-librarian loop in §00-07.6 — place each existing doc as a chapter, author
-its body, re-sync — done incrementally, at your own pace.
+You don't convert everything on day one: bootstrap ARC-100 alongside your
+existing tree, and do the **bulk migration of legacy docs as a single planned
+operation at version closeout** — not piecemeal during development
+([00-00 §00-00.10](00-00_ARC-100_General.md)). The per-doc mechanic is the
+librarian loop (§00-07.6): place a doc as a chapter, author its body, re-sync.
+If a bootstrap lands a mirror-class file over a pre-existing one, the colliding
+copy is moved to `.arc100/backups/<stamp>/` first.
 
 ### 00-07.6 — The two agents
 
-ARC-100 ships two Claude Code agents you drive by asking questions; they
-do the disciplined parts so you do not memorise the rules.
+Your instance ships two Claude Code agents (in `.claude/agents/` — so open
+`<NAME>-100/` as your workspace, §00-07.1). You drive them by asking; they keep
+the disciplined rules so you don't have to.
 
-- **`arc-100-librarian` — the only writer of the index.** It does
-  chapter-identity rulings, slot allocation, ULID minting, schema sweeps,
-  and filling in queued sync decisions — it sets each block's `decision:`
-  (`accept`/`reject`) in `.arc100/PENDING-INDEX-DECISIONS.yml`; the next
-  `arc_sync.py` run applies them. You never invent a chapter
-  number; you ask the librarian ("Where does concept X belong?" /
-  "Allocate the next chapter in band 40") and it commits the entry. It
-  emits one of three ruling shapes (`existing_chapter`, `new_chapter`,
-  `new_book` — the last is a halt for human review) and never allocates a
-  new book autonomously, edits chapter content, renames an `arc_100: true`
-  chapter, or mutates a ULID by hand.
-- **`likec4-author` — the architecture model.** It authors the LikeC4 DSL
-  model, defines views, applies theme/styling, and produces the
-  `likec4-view` fences you embed in chapters. The element vocabulary, view
-  taxonomy, theming, embedding mechanics, hosting-cost disciplines, and a
-  full worked example are in
-  [00-06 Architectural Modeling](00-06_ARC-100_Architectural_Modeling.md).
+- **`arc-100-librarian`** — the only writer of your working index. Ask "where
+  does X belong?" or "allocate the next chapter in band 40"; it does
+  chapter-identity rulings, slot allocation, ULID minting, schema sweeps, and
+  fills queued sync decisions (`/resolve-arc-100-issues`). It never allocates a
+  new book autonomously (that halts for your review), edits chapter bodies, or
+  mutates a ULID.
+- **`likec4-author`** — authors the LikeC4 model, views, and the `likec4-view`
+  fences you embed; full guide in
+  [00-06](00-06_ARC-100_Architectural_Modeling.md).
 
-The migration loop ties them together: ask the librarian to place an
-existing doc as a chapter → author the chapter body → ask `likec4-author`
-to model the system and embed per-chapter views → `mkdocs build --strict`
-→ `/sync-arc-100` (`tools/arc_sync.py --target .`) keeps the inherited
-standard fresh over time.
+**The working loop:** librarian places a doc as a chapter → you (or
+`likec4-author`) write the body/diagrams → `mkdocs build` → `/sync-arc-100`
+keeps the inherited standard fresh.
 
 ### 00-07.7 — Removing the synced ARC-100 footprint
 
@@ -388,9 +254,6 @@ project files are untouched. (To discard the instance entirely, just
   `FIELD_MAX_CHARS`) are refused at the boundary and escalated under
   `malformed_upstream` — they never auto-apply
   ([§00-05.5](00-05_ARC-100_Synchronization.md)).
-- **Banner renders as raw `##` text** — the banner `<div>` needs
-  `markdown="1"` for Python-Markdown's `md_in_html`
-  ([§00-05.6](00-05_ARC-100_Synchronization.md)).
 
 ### 00-07.9 — Pointers
 
@@ -431,10 +294,9 @@ project files are untouched. (To discard the instance entirely, just
 > `release.sh` — it is ARC-100-internal tooling, not shipped in the payload
 > — and follows §00-07.2 against the public mirror instead.
 
-ARC-100 dogfoods its own install by running `RUN_FIRST.sh` exactly as an
-adopter would, but against a **locally-assembled payload** rather than the
-public mirror, so the standup is verifiable before — or independent of —
-any publish. From the ARC-100 repo root:
+ARC-100 dogfoods its own install with the same flow as §00-07.2, but against a
+**locally-assembled payload** (so a standup is verifiable independent of any
+publish). From the ARC-100 repo root:
 
 ```bash
 out="$(bash ARC-100-SYNC/scripts/release.sh --keep-staging)"          # assemble a local payload
@@ -442,31 +304,10 @@ staging="$(printf '%s\n' "$out" | sed -n 's/.*Staging kept: //p')/payload"
 bash "$staging/RUN_FIRST.sh" INTARC                                   # creates ./INTARC-100/
 ```
 
-`RUN_FIRST.sh` creates `INTARC-100/` in the current directory (so run it
-from wherever the instance should land — the repo root puts it parallel to
-the green `docs/` tree). In one pass it writes
-`INTARC-100/{ARC-100-SYNC.config.yml, config.json}`, runs
-`arc_sync.py --source "$staging" --target INTARC-100` (`RUN_FIRST.sh`
-defaults `--source` to its own directory, so passing it is optional), and
-substitutes the seed `<PROJECT>` tokens. The result is a fully-named,
-empty instance:
-
-```text
-INTARC-100/
-├── docs/00/                              # Book 00 (8 chapters) + mirrored index
-├── docs/01/01-01_INTARC-100_Index.md     # working index, INTARC-100-INDEX-* markers
-├── .arc100/state.yml                     # sync state
-├── .claude/{agents,commands}/            # the two agents + two slash commands
-├── assets/arc100/…                       # home-page assets, fonts, tools/ulid.py
-├── config.json                           # {"documentation_system_name": "INTARC-100"}
-└── mkdocs.yml                            # site_name: INTARC-100, no residual <PROJECT>
-```
-
-Pass **only the name** — `RUN_FIRST.sh` manages `--target` and `--config`
-(passing either exits `2`). INTARC-100 is a *separate, parallel* instance;
-migrating the existing green `docs/` content into it is the dogfood
-activity that follows — the manual librarian loop (§00-07.6), done by hand
-at your own pace — not part of standing the instance up.
+This stands up a complete, *separate* `INTARC-100/` instance (Book 00, working
+index, `.arc100/`, `.claude/`, assets, `config.json`, `mkdocs.yml`). Migrating
+the existing green `docs/` content into it is the dogfood activity that follows
+(§00-07.6), not part of standing it up.
 
 ## Revisions
 
@@ -483,3 +324,4 @@ at your own pace — not part of standing the instance up.
 | 2026-06-15 | Revision 9: repointed the §00-07.2 clone command to the **`arc-100-standard/ARC-100-dist`** mirror (the dist repo was transferred into a new GitHub org for a project-neutral owner; the old URL redirects, but the canonical command should name the new owner). URL only; no section renumbered. |
 | 2026-06-16 | Revision 10: made the §00-07.2 clone idempotent + self-cleaning. The throwaway clone now goes into a fresh `mktemp -d` directory and is `rm -rf`'d after, instead of the fixed `${TMPDIR:-/tmp}/ARC-100-dist` path. The fixed path collided on re-run (`destination path … already exists and is not an empty directory`), which silently broke the re-clone-to-re-sync flow; the ephemeral dir is unique per run, auto-discarded, and never clutters the adopter's tree. Added a one-line note explaining the `mktemp`/`rm -rf` pattern. Command + note only; no section renumbered. |
 | 2026-06-16 | Revision 11: dropped the literal name from the §00-07.2 clone command (`bash "$CLONE/RUN_FIRST.sh"`, no argument — it prompts when none is given), so it can't be copy-pasted into a documentation system literally named "ACME"; the placeholder wasn't obviously a placeholder. (`RUN_FIRST.sh` still *accepts* an optional positional name for automation/tests/the dogfood runbook — the docs just never show it.) Also clarified §00-07.4 "Keeping current": `/sync-arc-100` is a Claude Code slash command (not a filesystem path; at `.claude/commands/sync-arc-100.md`), and updating is **on-demand** — there is no background/daemon sync (human-in-the-loop by design, since a sync can raise index decisions). Command + prose only; no section renumbered. |
+| 2026-06-16 | Revision 12: major simplification (author direction) + the workspace fix. Cut §00-07.1's rehash of *what ARC-100 is* (→ a tight instance-orientation table + a link to 00-00) and the §00-07.2–.6 restatements of the 00-05 sync model and 00-00 numbering (→ links), while keeping every action and genuine complexity (clone, exit codes, the index-decision escalation flow, the slot/book allocation rules, current limitations). **Fixed the `/sync-arc-100` doc gap:** §00-07.1 (new note), §00-07.4, and §00-07.6 now state that the `<NAME>-100/` instance *is* your editor/Claude Code workspace — Claude Code discovers `.claude/` commands and agents from the workspace root, so `/sync-arc-100` and the agents resolve only when the instance (not its parent) is the open workspace; `RUN_FIRST.sh`'s closing message says the same. Retitled §00-07.1 → "Your `<NAME>-100` instance", §00-07.3 → "After the bootstrap: deps and a first preview", §00-07.4 → "Keeping current"; trimmed §00-07.11's verbose file-tree. Title-only changes; no section number moved, all `[BB-CC §N]` citations intact. A 3-lens adversarial pass (complexity-preservation / rehash / links) confirmed no real action or complexity was lost; its fixes are folded in — restored the version-closeout bulk-migration constraint (§00-07.5, [00-00 §00-00.10](00-00_ARC-100_General.md)), scoped the `1` exit code to the re-sync path (the first run only bootstraps → `0`/`2`), and dropped the non-actionable banner-rendering troubleshooting bullet (the hook is mirror-class; that note belongs to 00-05.6). |
