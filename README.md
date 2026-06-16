@@ -5,12 +5,12 @@ PRs here.** This repository is the artifacts-only distribution channel for
 the ARC-100 documentation standard. The current release is always HEAD of
 `main`; `vN` tags are immutable bookmarks.
 
-Current release: **v1** (canonical source SHA `c70b762781987be00eba2dad32a0ed2b289ce64d`)
+Current release: **v1** (canonical source SHA `b59ebd91a089aa37cda52d6f20c3d016d97863a6`)
 
 ## Quickstart
 
 ```sh
-git clone --depth 1 https://github.com/titanium4638/ARC-100-dist.git "${TMPDIR:-/tmp}/ARC-100-dist"
+git clone --depth 1 https://github.com/arc-100-standard/ARC-100-dist.git "${TMPDIR:-/tmp}/ARC-100-dist"
 cd /path/to/your-project && python3 "${TMPDIR:-/tmp}/ARC-100-dist/tools/arc_sync.py" --target .
 ```
 

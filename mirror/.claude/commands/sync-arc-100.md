@@ -29,7 +29,7 @@ The adopter runs **upstream-delivered code**: clone the public distribution
 mirror at depth 1, then run its `arc_sync.py` against the project root.
 
 ```bash
-git clone --depth 1 https://github.com/titanium4638/ARC-100-dist.git "${TMPDIR:-/tmp}/ARC-100-dist"
+git clone --depth 1 https://github.com/arc-100-standard/ARC-100-dist.git "${TMPDIR:-/tmp}/ARC-100-dist"
 python3 "${TMPDIR:-/tmp}/ARC-100-dist/tools/arc_sync.py" --target .
 ```
 
