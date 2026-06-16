@@ -455,7 +455,7 @@ onboarding is a depth-1 clone followed by one command — the name-first
 ```bash
 CLONE="$(mktemp -d)"
 git clone --depth 1 https://github.com/arc-100-standard/ARC-100-dist.git "$CLONE"
-bash "$CLONE/RUN_FIRST.sh" ACME
+bash "$CLONE/RUN_FIRST.sh"          # prompts for your system's name
 rm -rf "$CLONE"
 ```
 
@@ -863,3 +863,4 @@ mirror, are delivered whole.
 | 2026-06-14 | Revision 13: phase 4b — `RUN_FIRST.sh` + mirror-class `.claude`/`ulid` deliveries. §00-05.3.1 component table: the `arc-100-librarian`, `likec4-author`, `sync-arc-100`, and `resolve-arc-100-issues` templates are now **delivered mirror-class** to `.claude/agents/` and `.claude/commands/` (a re-sync refreshes them, with backup), and the `tools/ulid.py` row notes its mirror-class downstream path `assets/arc100/tools/ulid.py`. §00-05.8 Distribution: the first-run command is now the name-first `RUN_FIRST.sh <NAME>` (which builds the named `<NAME>-100/` instance folder, writes its config + `config.json`, runs the underlying `arc_sync.py --target <NAME>-100`, and substitutes the seed tokens), with re-syncs calling `arc_sync.py --target .` from inside the instance; the payload tree gains a `RUN_FIRST.sh`-at-payload-root bullet and folds the `.claude/` agents+commands and `assets/arc100/tools/ulid.py` into the mirror-class list. No section renumbered; all `#c4-*` anchors preserved. See `versions/v2/implementation/phase_4b.md`. |
 | 2026-06-15 | Revision 14: repointed the distribution mirror from `titanium4638/ARC-100-dist` to **`arc-100-standard/ARC-100-dist`** (the dist repo was transferred into a new GitHub org so the published distribution is owned by a project-neutral name rather than a personal handle). Updated §00-05.8: the mirror name in prose, the `public mirror:` line in the distribution flow diagram, and the `git clone` command. The canonical source repo is unchanged. Prose/URL only; no section renumbered, all anchors preserved. |
 | 2026-06-16 | Revision 15: made the §00-05.8 clone idempotent + self-cleaning (`mktemp -d` for a unique throwaway dir, `rm -rf` after) — same fix as 00-07 §00-07.2. The fixed `${TMPDIR:-/tmp}/ARC-100-dist` path collided on re-run, breaking the re-clone-to-re-sync flow. Command-only; no section renumbered, anchors preserved. |
+| 2026-06-16 | Revision 16: dropped the literal example name from the §00-05.8 clone command (`bash "$CLONE/RUN_FIRST.sh"`, no argument — it prompts when none is given), so the command can't be copy-pasted into a system literally named "ACME". Command-only; no section renumbered, anchors preserved. |

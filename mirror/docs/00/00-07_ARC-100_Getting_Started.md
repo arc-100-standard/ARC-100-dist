@@ -101,7 +101,7 @@ parent folder; the script creates the named instance folder under it):
 ```bash
 CLONE="$(mktemp -d)"
 git clone --depth 1 https://github.com/arc-100-standard/ARC-100-dist.git "$CLONE"
-bash "$CLONE/RUN_FIRST.sh" ACME
+bash "$CLONE/RUN_FIRST.sh"          # prompts for your system's name
 rm -rf "$CLONE"
 ```
 
@@ -256,8 +256,14 @@ reconcile contract live in
 the banner and resolution flow are in
 [§00-05.6](00-05_ARC-100_Synchronization.md).
 
-**Keeping current.** There is no installer to re-run — re-clone the mirror
-and run the sync again (or just `/sync-arc-100`). Content updates arrive
+**Keeping current.** There is no installer to re-run, and **nothing syncs in
+the background** — updating is deliberate and on-demand. (A sync can raise
+judgment-bound index decisions, so it stays human-in-the-loop by design, not a
+daemon or cron job.) Pull updates whenever you choose: re-run the
+clone-and-run block from §00-07.2, or — inside Claude Code — the
+`/sync-arc-100` slash command (it is not a filesystem path; it lives at
+`.claude/commands/sync-arc-100.md` and wraps the same clone-and-run). Content
+updates arrive
 continuously: every upstream `main` commit republishes chapter bodies,
 tooling, and descriptions, while the ARC-100 **index version** (`vN`)
 changes only when chapters are added or removed upstream — the two-axis
@@ -476,3 +482,4 @@ at your own pace — not part of standing the instance up.
 | 2026-06-15 | Revision 8: added a "Preview your site" block to §00-07.3 (dogfood finding — the chapter described install + sync but never said how to actually *run* the site). Documents `mkdocs serve -f <NAME>-100/mkdocs.yml --livereload --dev-addr localhost:<PORT> -o` (and `mkdocs build -f …`), run from the folder's parent — `-o` opens the browser on serve, and `RUN_FIRST.sh` now prints this exact command on completion with the name and a scanned free port pre-filled. Explains the home is the generated index (no hand-maintained sidebar, so the "not included in nav" notes are expected) and that `--strict` is a CI gate (a fresh instance is strict-clean apart from the inherited Book 00 `project=arc-100` LikeC4 views). Prose-only; no section renumbered. (Pairs with `RUN_FIRST.sh` now filling the Book 01 placeholder title "`<NAME> System`" → "`<NAME>-100 System`", refresh-safe since Book 01 syncs slot identity only.) |
 | 2026-06-15 | Revision 9: repointed the §00-07.2 clone command to the **`arc-100-standard/ARC-100-dist`** mirror (the dist repo was transferred into a new GitHub org for a project-neutral owner; the old URL redirects, but the canonical command should name the new owner). URL only; no section renumbered. |
 | 2026-06-16 | Revision 10: made the §00-07.2 clone idempotent + self-cleaning. The throwaway clone now goes into a fresh `mktemp -d` directory and is `rm -rf`'d after, instead of the fixed `${TMPDIR:-/tmp}/ARC-100-dist` path. The fixed path collided on re-run (`destination path … already exists and is not an empty directory`), which silently broke the re-clone-to-re-sync flow; the ephemeral dir is unique per run, auto-discarded, and never clutters the adopter's tree. Added a one-line note explaining the `mktemp`/`rm -rf` pattern. Command + note only; no section renumbered. |
+| 2026-06-16 | Revision 11: dropped the literal name from the §00-07.2 clone command (`bash "$CLONE/RUN_FIRST.sh"`, no argument — it prompts when none is given), so it can't be copy-pasted into a documentation system literally named "ACME"; the placeholder wasn't obviously a placeholder. (`RUN_FIRST.sh` still *accepts* an optional positional name for automation/tests/the dogfood runbook — the docs just never show it.) Also clarified §00-07.4 "Keeping current": `/sync-arc-100` is a Claude Code slash command (not a filesystem path; at `.claude/commands/sync-arc-100.md`), and updating is **on-demand** — there is no background/daemon sync (human-in-the-loop by design, since a sync can raise index decisions). Command + prose only; no section renumbered. |
