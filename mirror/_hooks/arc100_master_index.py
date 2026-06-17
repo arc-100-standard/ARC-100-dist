@@ -882,11 +882,11 @@ def _render_tree(data, docs_dir: Path, mode: str) -> str:
                     if chapter.get("arc_100")
                     else ""
                 )
-                url = (
-                    _chapter_file_url(docs_dir, ch_id_raw, mode)
-                    if status_class == "active"
-                    else None
-                )
+                # A chapter with a body file on disk is a live link, badge and
+                # all. _chapter_file_url returns None when no file matches, so
+                # placeholders (which have no body file) still fall through to
+                # the non-link <div>.
+                url = _chapter_file_url(docs_dir, ch_id_raw, mode)
                 desc_attr = _data_desc_attr(chapter.get("description"))
                 label_attr = _data_desc_label_attr(_chapter_label(ch_id_raw))
                 if url:

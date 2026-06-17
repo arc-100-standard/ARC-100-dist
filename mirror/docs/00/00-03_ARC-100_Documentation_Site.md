@@ -172,12 +172,14 @@ ARC-100 hook does three things on every build:
    same machine-parseable block that documentation agents extract.
 2. **Writes** `<docs_dir>/00/index.md` containing a three-level HTML
    tree (`<div class="band">` → `<div class="book">` → `<div
-   class="chapter">`). Active chapters whose `.md` file exists in
-   `docs/00/` are rendered as `<a>` rows so the whole row is a
-   navigation link; placeholder/draft chapters render as inert
-   `<div>` rows with a status badge. Every row carries
-   `data-description` and `data-desc-label` attributes that drive
-   the right-column hover overlay (see §00-03.5.3).
+   class="chapter">`). A chapter row is a live link iff its body
+   `.md` file exists on disk: any such chapter is rendered as an
+   `<a>` row so the whole row is a navigation link, **regardless of
+   status** — a non-active chapter (e.g. a `draft`) with a file is
+   navigable and simply carries its status as a badge. Chapters with
+   no body file (placeholders) render as inert `<div>` rows. Every
+   row carries `data-description` and `data-desc-label` attributes
+   that drive the right-column hover overlay (see §00-03.5.3).
 3. **Overrides** `config['nav']` with a nested structure derived
    from the same YAML. Bands become top-level sidebar sections;
    books become nested sub-sections; active chapters become leaf

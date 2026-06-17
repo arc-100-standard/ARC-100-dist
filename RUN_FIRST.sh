@@ -240,7 +240,7 @@ task = {
     "type": "shell",
     "command": "mkdocs",
     "args": ["serve", "-f", f"{name}/mkdocs.yml", "--livereload",
-             "--dev-addr", f"localhost:{port}"],
+             "--dev-addr", f"localhost:{port}", "-o"],
     "options": {"cwd": "${workspaceFolder}"},
     "isBackground": True,
     "group": "build",
