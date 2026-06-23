@@ -5,7 +5,7 @@ PRs here.** This repository is the artifacts-only distribution channel for
 the ARC-100 documentation standard. The current release is always HEAD of
 `main`; `vN` tags are immutable bookmarks.
 
-Current release: **v3** (canonical source SHA `24307cf3815c1240c5e5d9fe26280cbaca6cee78`)
+Current release: **v3** (canonical source SHA `8b609a13bd7d954fe92306191410964a3d68365d`)
 
 ## Quickstart
 

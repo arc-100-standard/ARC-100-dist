@@ -372,7 +372,8 @@ def _build_inventory(config) -> None:
     # Inventory mode: chapter files at docs_dir root — book_id is
     # informational only (label resolution); the file lookup ignores it.
     tree_html = _render_tree(data, docs_dir, mode="inventory")
-    page = _render_page_inventory(data, tree_html, counts, project_name)
+    version_label = _version_label(project_root, data)
+    page = _render_page_inventory(data, tree_html, counts, project_name, version_label)
 
     # project_root is already docs_dir.parent (the --target root). The standard's
     # own render is never a sync --target, so .arc100/ never exists here and this
@@ -496,6 +497,7 @@ def _build_project_index(config) -> None:
         general_link_target = None
         general_link_display = None
 
+    version_label = _version_label(project_root, data)
     page = _render_page_project(
         data,
         tree_html,
@@ -506,6 +508,7 @@ def _build_project_index(config) -> None:
         index_link_display=index_link_display,
         general_link_target=general_link_target,
         general_link_display=general_link_display,
+        version_label=version_label,
     )
 
     # .arc100/ sits at the --target root (= docs_dir.parent when docs_dir is
@@ -924,15 +927,40 @@ def _render_tree(data, docs_dir: Path, mode: str) -> str:
     return "\n".join(parts)
 
 
+def _version_label(project_root: Path, data) -> str:
+    """The page's `Version:` meta string (pre-escaped, safe to inject raw).
+
+    A synced downstream carries a live `.arc100/state.yml` (rewritten by
+    `arc_sync` on every sync), so the label reflects the ARC-100
+    tool/distribution it is actually on — the synced release plus the
+    distribution build (short `source_sha`) — rather than the frozen index
+    front-matter `arc_100_version`. The standard's own master/version sites
+    have no `state.yml` and fall back to the index version. The build sha is
+    what makes the label move on a content release (which advances the
+    distribution without bumping the release tag). TM-4b-2: every dynamic
+    substitution is HTML-escaped here."""
+    state_path = project_root / ".arc100" / "state.yml"
+    if state_path.is_file():
+        try:
+            state = yaml.safe_load(state_path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            state = {}
+        tag = state.get("release_tag")
+        if tag:
+            short = str(state.get("source_sha") or "")[:7]
+            if short:
+                return f"ARC-100 {h(str(tag))} · build {h(short)}"
+            return f"ARC-100 {h(str(tag))}"
+    return f"ARC-{h(str(data.get('arc_100_version', 'unknown')))}"
+
+
 def _render_page_inventory(
-    data, tree_html: str, counts: dict[str, int], project_name: str
+    data, tree_html: str, counts: dict[str, int], project_name: str, version_label: str
 ) -> str:
-    arc_version = data.get("arc_100_version", "unknown")
     active_version = data.get("active_version") or "(none — master only)"
     total = sum(counts.values())
-    # TM-4b-2: HTML-escape project_name at every render-page substitution
-    # site. The literal `ARC-` Version prefix below is the scheme label
-    # of the ARC-100 version-numbering convention and stays unchanged.
+    # TM-4b-2: HTML-escape every render-page substitution site. version_label
+    # is pre-escaped by _version_label; project_name is escaped below.
     return f"""---
 title: {h(project_name)} Master Index (Home)
 generated: true
@@ -948,7 +976,7 @@ note: |
 > The YAML block in that file remains the source of truth for agents.
 
 <div class="arc100-meta">
-  <span class="arc100-meta-item"><strong>Version:</strong> ARC-{h(str(arc_version))}</span>
+  <span class="arc100-meta-item"><strong>Version:</strong> {version_label}</span>
   <span class="arc100-meta-item"><strong>Active version:</strong> {h(str(active_version))}</span>
   <span class="arc100-meta-item"><strong>Chapters:</strong> {total} total ({counts['active']} active, {counts['draft']} draft, {counts['placeholder']} placeholder)</span>
 </div>
@@ -984,8 +1012,8 @@ def _render_page_project(
     index_link_display: str,
     general_link_target: str | None,
     general_link_display: str | None,
+    version_label: str,
 ) -> str:
-    arc_version = data.get("arc_100_version", "unknown")
     active_version = data.get("active_version") or "(none — master only)"
     total = sum(counts.values())
     # The "Project" differentiator distinguishes the ARC-100 Project
@@ -1001,10 +1029,10 @@ def _render_page_project(
     # word "Project" in ARC-100 Project's rendered title, and zero in
     # any downstream's rendered title.
     #
-    # TM-4b-2: see _render_page_inventory above. The `ARC-` Version
-    # prefix is the scheme-label of the ARC-100 version-numbering
-    # convention (a downstream's "Version: ARC-100.1" surfaces the sync
-    # relationship to upstream ARC-100) and stays unchanged.
+    # TM-4b-2: see _render_page_inventory above. version_label is pre-escaped
+    # by _version_label — for a synced downstream it surfaces the synced
+    # release + distribution build from .arc100/state.yml (not the frozen
+    # index front-matter); the standard's own sites fall back to ARC-<ver>.
     discriminator = " Project" if is_arc100_project else ""
     # The note's shorthand chapter id is the BB-CC prefix of the index
     # source basename (everything before the first "_"): e.g.
@@ -1042,7 +1070,7 @@ note: |
 > in `01-01` remains the source of truth.
 
 <div class="arc100-meta">
-  <span class="arc100-meta-item"><strong>Version:</strong> ARC-{h(str(arc_version))}</span>
+  <span class="arc100-meta-item"><strong>Version:</strong> {version_label}</span>
   <span class="arc100-meta-item"><strong>Active version:</strong> {h(str(active_version))}</span>
   <span class="arc100-meta-item"><strong>Chapters:</strong> {total} total ({counts['active']} active, {counts['draft']} draft, {counts['placeholder']} placeholder)</span>
 </div>
