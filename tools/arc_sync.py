@@ -1123,6 +1123,8 @@ def _empty_state() -> dict:
         "release_tag": "",
         "source_sha": "",
         "files": {},
+        "claude_target": "",
+        "claude_files": {},
         "index_snapshot": [],
         "diverged": {},
     }
@@ -1161,6 +1163,23 @@ def load_state(path: Path) -> tuple[dict | None, bool]:
     ):
         return _empty_state(), True
     state["files"] = files
+    # Claude file class (phase 5). Missing keys read as the default (a pre-phase-5
+    # state, or a bootstrap that predates this fix) — NOT a shape violation; a
+    # wrong-typed value still routes to lost-state, matching files/release_tag.
+    claude_target = raw.get("claude_target")
+    if claude_target is None:
+        claude_target = ""
+    if not isinstance(claude_target, str):
+        return _empty_state(), True
+    state["claude_target"] = claude_target
+    claude_files = raw.get("claude_files")
+    if claude_files is None:
+        claude_files = {}
+    if not isinstance(claude_files, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in claude_files.items()
+    ):
+        return _empty_state(), True
+    state["claude_files"] = claude_files
     snapshot = raw.get("index_snapshot")
     if snapshot is None:
         snapshot = []
@@ -1190,6 +1209,8 @@ def write_state(target: Path, state: dict, dry_run: bool) -> None:
         "source_sha": state.get("source_sha", ""),
         "synced_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "files": state.get("files", {}),
+        "claude_target": state.get("claude_target", ""),
+        "claude_files": state.get("claude_files", {}),
         "index_snapshot": state.get("index_snapshot", []),
         "diverged": state.get("diverged", {}),
     }
